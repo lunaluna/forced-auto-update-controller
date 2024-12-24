@@ -41,7 +41,7 @@ class FAUC_Auto_update_Controller {
 		add_action( 'admin_init', array( $this, 'settings_init' ) );
 
 		// (1) Git(VCS)チェックを無視 (本番なら VCS下でも自動更新).
-		add_filter( 'automatic_update_is_vcs_checkout', array( $this, 'control_vcs_check' ), 10, 1 );
+		add_filter( 'automatic_updates_is_vcs_checkout', array( $this, 'control_vcs_check' ), 10, 1 );
 
 		// (2) コア自動更新: 優先度 9999 で最終上書き.
 		add_filter( 'auto_update_core', array( $this, 'control_auto_update_core' ), 9999, 1 );
