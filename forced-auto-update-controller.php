@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Forced Auto Update Controller
  * Description: Git 管理下でも本番環境（指定ドメインパターンに合致）だけは自動更新をすべて有効化し、テスト環境・ローカル環境を無効化するプラグイン。他のテーマやプラグインが自動更新を無効化していても最終的に上書きします。
- * Version:     1.0.0
+ * Version:     1.0.1
  * Author:      Hiroki Saiki
  * Author URI:  https://profiles.wordpress.org/lunaluna_dev/
  * License:     GPLv2 or later

@@ -5,8 +5,8 @@
  * ドメインパターンを指定し、本番環境（パターン一致）なら
  *   - コア/プラグイン/テーマ/翻訳ファイルの自動更新を強制的に有効化
  *   - プラグイン/テーマ一覧に自動更新トグルUI (WP5.5+) を表示
- * それ以外の環境では自動更新を無効化し、UI も非表示にする。
- * 優先度 9999 を指定して最終的に上書き。
+ * それ以外の環境では自動更新を無効化し、UI も非表示にする
+ * 優先度 9999 を指定して最終的に上書き
  *
  * @package ForcedAutoUpdateController
  */
@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class FAUC_Auto_Updates_Controller {
 
 	/**
-	 * 保存するオプション名 (DB 上のキー).
+	 * 保存するオプション名 (DB 上のキー)
 	 *
 	 * @var string
 	 */
@@ -30,7 +30,7 @@ class FAUC_Auto_Updates_Controller {
 	/**
 	 * コンストラクタ
 	 *
-	 * - フィルターフック・アクションフックの登録を行う。
+	 * - フィルターフック・アクションフックの登録を行う
 	 */
 	public function __construct() {
 
@@ -60,6 +60,11 @@ class FAUC_Auto_Updates_Controller {
 
 		// (7) テーマ一覧の自動更新UI (WP5.5+): 優先度9999で最終上書き.
 		add_filter( 'themes_auto_update_enabled', array( $this, 'control_auto_update_ui_for_themes' ), 9999, 1 );
+
+		/**
+		 * (8) 管理者 & 本番環境のみダッシュボードにメタボックス追加
+		 */
+		add_action( 'wp_dashboard_setup', array( $this, 'add_dashboard_meta_box_warning' ) );
 	}
 
 	/**
@@ -69,11 +74,11 @@ class FAUC_Auto_Updates_Controller {
 	 */
 	public function add_settings_page() {
 		add_options_page(
-			__( 'Forced Auto Update Control', 'forced-auto-update-controller' ), // ページタイトル
-			__( 'Forced Auto Update Control', 'forced-auto-update-controller' ), // メニュータイトル
-			'manage_options',                                                   // 権限
-			'fauc-forced-auto-updates-controller',                              // スラッグ
-			array( $this, 'render_settings_page' )                              // コールバック
+			__( 'Forced Auto Update Control', 'forced-auto-update-controller' ), // ページタイトル.
+			__( 'Forced Auto Update Control', 'forced-auto-update-controller' ), // メニュータイトル.
+			'manage_options',                                                    // 権限.
+			'fauc-forced-auto-updates-controller',                               // スラッグ.
+			array( $this, 'render_settings_page' )                               // コールバック.
 		);
 	}
 
@@ -255,6 +260,42 @@ class FAUC_Auto_Updates_Controller {
 	 */
 	public function control_auto_update_ui_for_themes( $enabled ) {
 		return $this->is_production_domain();
+	}
+
+	/**
+	 * (8) 管理者 & 本番環境のみ、ダッシュボードにメタボックスを追加
+	 *
+	 * @return void
+	 */
+	public function add_dashboard_meta_box_warning() {
+		// 管理者（manage_options 権限）かどうかを確認.
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		// 本番環境かどうかを確認.
+		if ( $this->is_production_domain() ) {
+			wp_add_dashboard_widget(
+				'fauc_git_integration_warning',
+				__( 'Forced Auto Update Controller Notice', 'forced-auto-update-controller' ),
+				array( $this, 'render_dashboard_meta_box_warning' )
+			);
+		}
+	}
+
+	/**
+	 * ダッシュボードメタボックスに表示する内容
+	 *
+	 * @return void
+	 */
+	public function render_dashboard_meta_box_warning() {
+		echo '<p>';
+		echo esc_html__(
+			'このサイトは Git 管理されていますが、Forced Auto update Controller プラグインの設定により自動更新が有効にできるようになっています。
+サーバ上のファイルが自動で更新され、Git 管理との整合が崩れる恐れがありますので、更新後に差分をコミットする、あるいはステージング環境でテストした後に本番へ手動デプロイするなど、Git との連携において留意すべき点があることに充分注意してください',
+			'forced-auto-update-controller'
+		);
+		echo '</p>';
 	}
 
 	/**
