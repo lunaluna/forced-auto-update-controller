@@ -15,6 +15,9 @@ Forced Auto update Controller is a custom WordPress plugin that allows you to co
 
 == Changelog ==
 
+= 1.0.2 =
+* Fix a fatal error
+
 = 1.0.1 =
 * Add metabox to administrators' Dashboard
 * Some code format

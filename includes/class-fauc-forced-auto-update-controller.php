@@ -1,6 +1,6 @@
 <?php
 /**
- * FAUC_Forced_Auto_Updates_Controller クラスファイル
+ * FAUC_Forced_Auto_update_Controller クラスファイル
  *
  * ドメインパターンを指定し、本番環境（パターン一致）なら
  *   - コア/プラグイン/テーマ/翻訳ファイルの自動更新を強制的に有効化
@@ -16,9 +16,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * メインクラス: FAUC_Auto_Updates_Controller
+ * メインクラス: FAUC_Auto_update_Controller
  */
-class FAUC_Auto_Updates_Controller {
+class FAUC_Auto_update_Controller {
 
 	/**
 	 * 保存するオプション名 (DB 上のキー)
@@ -41,7 +41,7 @@ class FAUC_Auto_Updates_Controller {
 		add_action( 'admin_init', array( $this, 'settings_init' ) );
 
 		// (1) Git(VCS)チェックを無視 (本番なら VCS下でも自動更新).
-		add_filter( 'automatic_updates_is_vcs_checkout', array( $this, 'control_vcs_check' ), 10, 1 );
+		add_filter( 'automatic_update_is_vcs_checkout', array( $this, 'control_vcs_check' ), 10, 1 );
 
 		// (2) コア自動更新: 優先度 9999 で最終上書き.
 		add_filter( 'auto_update_core', array( $this, 'control_auto_update_core' ), 9999, 1 );
@@ -77,7 +77,7 @@ class FAUC_Auto_Updates_Controller {
 			__( 'Forced Auto Update Control', 'forced-auto-update-controller' ), // ページタイトル.
 			__( 'Forced Auto Update Control', 'forced-auto-update-controller' ), // メニュータイトル.
 			'manage_options',                                                    // 権限.
-			'fauc-forced-auto-updates-controller',                               // スラッグ.
+			'fauc-forced-auto-update-controller',                               // スラッグ.
 			array( $this, 'render_settings_page' )                               // コールバック.
 		);
 	}
@@ -94,7 +94,7 @@ class FAUC_Auto_Updates_Controller {
 			'FAUC_forced_auto_update_section',
 			__( 'Auto Updates 設定', 'forced-auto-update-controller' ),
 			array( $this, 'settings_section_callback' ),
-			'fauc-forced-auto-updates-controller'
+			'fauc-forced-auto-update-controller'
 		);
 
 		// ドメインパターン入力フィールド登録.
@@ -102,13 +102,13 @@ class FAUC_Auto_Updates_Controller {
 			'FAUC_forced_auto_update_domain_field',
 			__( '本番環境URL(ドメイン)パターン', 'forced-auto-update-controller' ),
 			array( $this, 'domain_field_callback' ),
-			'fauc-forced-auto-updates-controller',
+			'fauc-forced-auto-update-controller',
 			'FAUC_forced_auto_update_section'
 		);
 
 		// オプション登録 (sanitize_text_field).
 		register_setting(
-			'fauc-forced-auto-updates-controller',
+			'fauc-forced-auto-update-controller',
 			$this->option_name,
 			array(
 				'type'              => 'string',
@@ -161,8 +161,8 @@ class FAUC_Auto_Updates_Controller {
 			<h1><?php echo esc_html__( 'Forced Auto Update Control 設定', 'forced-auto-update-controller' ); ?></h1>
 			<form action="options.php" method="post">
 				<?php
-				settings_fields( 'fauc-forced-auto-updates-controller' );
-				do_settings_sections( 'fauc-forced-auto-updates-controller' );
+				settings_fields( 'fauc-forced-auto-update-controller' );
+				do_settings_sections( 'fauc-forced-auto-update-controller' );
 				submit_button();
 				?>
 			</form>
