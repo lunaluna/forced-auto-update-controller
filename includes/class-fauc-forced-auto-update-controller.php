@@ -5,6 +5,7 @@
  * ドメインパターンを指定し、本番環境（パターン一致）なら
  *   - コア/プラグイン/テーマ/翻訳ファイルの自動更新を強制的に有効化
  *   - プラグイン/テーマ一覧に自動更新トグルUI (WP5.5+) を表示
+ *   - ただし、チェックが入っているプラグイン・テーマは自動更新を除外
  * それ以外の環境では自動更新を無効化し、UI も非表示にする
  * 優先度 9999 を指定して最終的に上書き
  *
@@ -46,10 +47,10 @@ class FAUC_Auto_update_Controller {
 		// (2) コア自動更新: 優先度 9999 で最終上書き.
 		add_filter( 'auto_update_core', array( $this, 'control_auto_update_core' ), 9999, 1 );
 
-		// (3) プラグイン自動更新: 優先度 9999 で最終上書き.
+		// (3) プラグイン自動更新: 優先度 9999 で最終上書き. (チェックしたプラグインは除外)
 		add_filter( 'auto_update_plugin', array( $this, 'control_auto_update_plugin' ), 9999, 2 );
 
-		// (4) テーマ自動更新: 優先度 9999 で最終上書き.
+		// (4) テーマ自動更新: 優先度 9999 で最終上書き. (チェックしたテーマは除外)
 		add_filter( 'auto_update_theme', array( $this, 'control_auto_update_theme' ), 9999, 2 );
 
 		// (5) 翻訳ファイル自動更新: 優先度 9999 で最終上書き.
@@ -77,9 +78,41 @@ class FAUC_Auto_update_Controller {
 			__( 'Forced Auto Update Control', 'forced-auto-update-controller' ), // ページタイトル.
 			__( 'Forced Auto Update Control', 'forced-auto-update-controller' ), // メニュータイトル.
 			'manage_options',                                                    // 権限.
-			'fauc-forced-auto-update-controller',                               // スラッグ.
+			'fauc-forced-auto-update-controller',                                // スラッグ.
 			array( $this, 'render_settings_page' )                               // コールバック.
 		);
+	}
+
+	/**
+	 * 設定ページのHTMLを描画
+	 *
+	 * - add_options_page() のコールバックで呼び出されるメソッド
+	 * - WordPress 管理画面での設定フォームを表示する
+	 *
+	 * @return void
+	 */
+	public function render_settings_page() {
+		// 管理者権限を持たないユーザーは何もしない.
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		?>
+		<div class="wrap">
+			<h1><?php echo esc_html__( 'Forced Auto Update Control 設定', 'forced-auto-update-controller' ); ?></h1>
+			<form action="options.php" method="post">
+				<?php
+				// settings_fields() は nonce 等のセキュリティフィールドを出力.
+				settings_fields( 'fauc-forced-auto-update-controller' );
+
+				// do_settings_sections() は設定セクションとフィールドを出力.
+				do_settings_sections( 'fauc-forced-auto-update-controller' );
+
+				// 「変更を保存」ボタンを出力.
+				submit_button();
+				?>
+			</form>
+		</div>
+		<?php
 	}
 
 	/**
@@ -97,7 +130,7 @@ class FAUC_Auto_update_Controller {
 			'fauc-forced-auto-update-controller'
 		);
 
-		// ドメインパターン入力フィールド登録.
+		// ドメインパターン入力フィールド.
 		add_settings_field(
 			'FAUC_forced_auto_update_domain_field',
 			__( '本番環境URL(ドメイン)パターン', 'forced-auto-update-controller' ),
@@ -106,7 +139,31 @@ class FAUC_Auto_update_Controller {
 			'FAUC_forced_auto_update_section'
 		);
 
-		// オプション登録 (sanitize_text_field).
+		/**
+		 * ここからプラグイン・テーマのチェックリスト用
+		 */
+
+		// プラグインのチェックリスト.
+		add_settings_field(
+			'FAUC_plugin_checklist_field',
+			__( '自動更新を除外したいプラグイン', 'forced-auto-update-controller' ),
+			array( $this, 'plugin_checklist_field_callback' ),
+			'fauc-forced-auto-update-controller',
+			'FAUC_forced_auto_update_section'
+		);
+
+		// テーマのチェックリスト.
+		add_settings_field(
+			'FAUC_theme_checklist_field',
+			__( '自動更新を除外したいテーマ', 'forced-auto-update-controller' ),
+			array( $this, 'theme_checklist_field_callback' ),
+			'fauc-forced-auto-update-controller',
+			'FAUC_forced_auto_update_section'
+		);
+
+		/**
+		 * register_setting: 2つのオプションを追加
+		 */
 		register_setting(
 			'fauc-forced-auto-update-controller',
 			$this->option_name,
@@ -114,6 +171,26 @@ class FAUC_Auto_update_Controller {
 				'type'              => 'string',
 				'sanitize_callback' => 'sanitize_text_field',
 				'default'           => '',
+			)
+		);
+		// プラグイン除外リスト.
+		register_setting(
+			'fauc-forced-auto-update-controller',
+			$this->option_name . '_excluded_plugins',
+			array(
+				'type'              => 'array',
+				'sanitize_callback' => array( $this, 'sanitize_checklist' ),
+				'default'           => array(),
+			)
+		);
+		// テーマ除外リスト.
+		register_setting(
+			'fauc-forced-auto-update-controller',
+			$this->option_name . '_excluded_themes',
+			array(
+				'type'              => 'array',
+				'sanitize_callback' => array( $this, 'sanitize_checklist' ),
+				'default'           => array(),
 			)
 		);
 	}
@@ -126,7 +203,7 @@ class FAUC_Auto_update_Controller {
 	public function settings_section_callback() {
 		echo '<p>';
 		echo esc_html__(
-			'指定したドメインを含む環境でのみ自動アップデートをすべて有効化し、それ以外の環境ではすべて無効化します。他プラグインで無効化されていても最終的に上書きします。',
+			'指定したドメイン(本番環境)では自動アップデートを強制的に有効化し、それ以外の環境ではすべて無効化します。ただし、下記のチェックリストで除外したプラグイン・テーマは自動更新されません。',
 			'forced-auto-update-controller'
 		);
 		echo '</p>';
@@ -148,26 +225,85 @@ class FAUC_Auto_update_Controller {
 	}
 
 	/**
-	 * 設定ページのHTMLを描画
+	 * プラグインチェックリストの表示コールバック
 	 *
 	 * @return void
 	 */
-	public function render_settings_page() {
-		if ( ! current_user_can( 'manage_options' ) ) {
-			return;
+	public function plugin_checklist_field_callback() {
+		// 現在の除外設定を取得.
+		$excluded_plugins = get_option( $this->option_name . '_excluded_plugins', array() );
+
+		// 全プラグイン一覧を取得.
+		$all_plugins = get_plugins(); // [ plugin_file => array( 'Name' => 'xxx', ... ), ... ]
+
+		if ( ! empty( $all_plugins ) ) {
+			echo '<p>' . esc_html__( 'チェックを入れると「自動更新対象から外す」プラグインになります。', 'forced-auto-update-controller' ) . '</p>';
+			echo '<ul>';
+			foreach ( $all_plugins as $plugin_file => $plugin_data ) {
+				$plugin_name = $plugin_data['Name'];
+				$checked     = in_array( $plugin_file, $excluded_plugins, true ) ? 'checked' : '';
+				printf(
+					'<li><label><input type="checkbox" name="%1$s[]" value="%2$s" %3$s /> %4$s</label></li>',
+					esc_attr( $this->option_name . '_excluded_plugins' ),
+					esc_attr( $plugin_file ),
+					$checked,
+					esc_html( $plugin_name )
+				);
+			}
+			echo '</ul>';
+		} else {
+			echo '<p>' . esc_html__( 'プラグインがインストールされていません。', 'forced-auto-update-controller' ) . '</p>';
 		}
-		?>
-		<div class="wrap">
-			<h1><?php echo esc_html__( 'Forced Auto Update Control 設定', 'forced-auto-update-controller' ); ?></h1>
-			<form action="options.php" method="post">
-				<?php
-				settings_fields( 'fauc-forced-auto-update-controller' );
-				do_settings_sections( 'fauc-forced-auto-update-controller' );
-				submit_button();
-				?>
-			</form>
-		</div>
-		<?php
+	}
+
+	/**
+	 * テーマチェックリストの表示コールバック
+	 *
+	 * @return void
+	 */
+	public function theme_checklist_field_callback() {
+		// 現在の除外設定を取得.
+		$excluded_themes = get_option( $this->option_name . '_excluded_themes', array() );
+
+		// インストール済みテーマ一覧を取得.
+		$all_themes = wp_get_themes(); // [ 'twentytwentytwo' => WP_Theme, ... ]
+
+		if ( ! empty( $all_themes ) ) {
+			echo '<p>' . esc_html__( 'チェックを入れると「自動更新対象から外す」テーマになります。', 'forced-auto-update-controller' ) . '</p>';
+			echo '<ul>';
+			foreach ( $all_themes as $theme_slug => $theme_obj ) {
+				$theme_name = $theme_obj->get( 'Name' );
+				$checked    = in_array( $theme_slug, $excluded_themes, true ) ? 'checked' : '';
+				printf(
+					'<li><label><input type="checkbox" name="%1$s[]" value="%2$s" %3$s /> %4$s</label></li>',
+					esc_attr( $this->option_name . '_excluded_themes' ),
+					esc_attr( $theme_slug ),
+					$checked,
+					esc_html( $theme_name )
+				);
+			}
+			echo '</ul>';
+		} else {
+			echo '<p>' . esc_html__( 'テーマがインストールされていません。', 'forced-auto-update-controller' ) . '</p>';
+		}
+	}
+
+	/**
+	 * チェックリストのサニタイズコールバック
+	 *
+	 * @param array $input ユーザー送信値
+	 * @return array
+	 */
+	public function sanitize_checklist( $input ) {
+		if ( ! is_array( $input ) ) {
+			return array();
+		}
+
+		$output = array();
+		foreach ( $input as $val ) {
+			$output[] = sanitize_text_field( $val );
+		}
+		return $output;
 	}
 
 	/**
@@ -207,28 +343,43 @@ class FAUC_Auto_update_Controller {
 	 * @return bool
 	 */
 	public function control_auto_update_core( $update ) {
+		// 本番環境かどうか
 		return $this->is_production_domain();
 	}
 
 	/**
 	 * (3) プラグイン自動更新フィルタ
 	 *
-	 * @param bool   $update 自動更新許可フラグ
-	 * @param object $item   プラグイン情報
+	 * @param bool   $update    自動更新を許可するか (true=許可, false=拒否)
+	 * @param object $item      プラグイン情報 ( $item->plugin = "hello-dolly/hello.php" 等)
 	 * @return bool
 	 */
 	public function control_auto_update_plugin( $update, $item ) {
+		// 「除外リスト」に含まれていれば false を返す
+		$excluded_plugins = get_option( $this->option_name . '_excluded_plugins', array() );
+
+		if ( isset( $item->plugin ) && in_array( $item->plugin, $excluded_plugins, true ) ) {
+			return false; // チェック済み → 自動更新除外
+		}
+
+		// それ以外の場合は、本番なら自動更新許可、非本番なら拒否
 		return $this->is_production_domain();
 	}
 
 	/**
 	 * (4) テーマ自動更新フィルタ
 	 *
-	 * @param bool   $update 自動更新許可フラグ
-	 * @param object $item   テーマ情報
+	 * @param bool   $update (true=許可/false=拒否)
+	 * @param object $item   テーマ情報 ($item->theme = 'twentytwentytwo' 等)
 	 * @return bool
 	 */
 	public function control_auto_update_theme( $update, $item ) {
+		$excluded_themes = get_option( $this->option_name . '_excluded_themes', array() );
+
+		if ( isset( $item->theme ) && in_array( $item->theme, $excluded_themes, true ) ) {
+			return false; // 除外
+		}
+
 		return $this->is_production_domain();
 	}
 
@@ -305,5 +456,7 @@ class FAUC_Auto_update_Controller {
 	 */
 	public function uninstall() {
 		delete_option( $this->option_name );
+		delete_option( $this->option_name . '_excluded_plugins' );
+		delete_option( $this->option_name . '_excluded_themes' );
 	}
 }
