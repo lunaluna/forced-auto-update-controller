@@ -1,7 +1,7 @@
 <?php
 /**
  * プラグイン有効化時 (register_activation_hook) に呼び出される関数
- * PHP 7.4+ / WordPress 5.5+ を必須とし、満たさない場合はプラグインを無効化しつつ警告を表示
+ * PHP 7.4+ / WordPress 6.0+ を必須とし、満たさない場合はプラグインを無効化しつつ警告を表示
  *
  * @package ForcedAutoUpdateController
  */
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 function fauc_check_environment() {
 	$required_php_version = '7.4';
-	$required_wp_version  = '5.5';
+	$required_wp_version  = '6.0';
 
 	$current_php_version = PHP_VERSION;
 	$current_wp_version  = get_bloginfo( 'version' );

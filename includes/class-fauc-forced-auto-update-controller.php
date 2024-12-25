@@ -448,15 +448,4 @@ class FAUC_Auto_update_Controller {
 		);
 		echo '</p>';
 	}
-
-	/**
-	 * アンインストール時に呼び出されるオプション削除 (uninstall.phpで実行)
-	 *
-	 * @return void
-	 */
-	public function uninstall() {
-		delete_option( $this->option_name );
-		delete_option( $this->option_name . '_excluded_plugins' );
-		delete_option( $this->option_name . '_excluded_themes' );
-	}
 }
