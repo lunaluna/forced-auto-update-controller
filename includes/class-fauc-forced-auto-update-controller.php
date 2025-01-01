@@ -2,7 +2,7 @@
 /**
  * FAUC_Forced_Auto_update_Controller クラスファイル
  *
- * ドメインパターンを指定し、本番環境（パターン一致）なら
+ * ドメインパターンを指定し、パターンが一致したら
  *   - コア/プラグイン/テーマ/翻訳ファイルの自動更新を強制的に有効化
  *   - プラグイン/テーマ一覧に自動更新トグルUI (WP5.5+) を表示
  *   - ただし、チェックが入っているプラグイン・テーマは自動更新を除外
@@ -41,7 +41,7 @@ class FAUC_Auto_update_Controller {
 		// 設定欄・フィールドを初期化.
 		add_action( 'admin_init', array( $this, 'settings_init' ) );
 
-		// (1) Git(VCS)チェックを無視 (本番なら VCS下でも自動更新).
+		// (1) バージョンコントロールのチェックを無効化.
 		add_filter( 'automatic_updates_is_vcs_checkout', array( $this, 'control_vcs_check' ), 10, 1 );
 
 		// (2) コア自動更新: 優先度 9999 で最終上書き.
@@ -62,9 +62,7 @@ class FAUC_Auto_update_Controller {
 		// (7) テーマ一覧の自動更新UI (WP5.5+): 優先度9999で最終上書き.
 		add_filter( 'themes_auto_update_enabled', array( $this, 'control_auto_update_ui_for_themes' ), 9999, 1 );
 
-		/**
-		 * (8) 管理者 & 本番環境のみダッシュボードにメタボックス追加
-		 */
+		// (8) 管理者のみダッシュボードにメタボックス追加.
 		add_action( 'wp_dashboard_setup', array( $this, 'add_dashboard_meta_box_warning' ) );
 	}
 
@@ -92,7 +90,7 @@ class FAUC_Auto_update_Controller {
 	 * @return void
 	 */
 	public function render_settings_page() {
-		// 管理者権限を持たないユーザーは何もしない.
+		// 管理者権限を持たないユーザーの場合は何もしない.
 		if ( ! current_user_can( 'manage_options' ) ) {
 			return;
 		}
@@ -101,10 +99,10 @@ class FAUC_Auto_update_Controller {
 			<h1><?php echo esc_html__( 'Forced Auto Update Control 設定', 'forced-auto-update-controller' ); ?></h1>
 			<form action="options.php" method="post">
 				<?php
-				// settings_fields() は nonce 等のセキュリティフィールドを出力.
+				// settings_fields() で nonce 等のセキュリティフィールドを出力.
 				settings_fields( 'fauc-forced-auto-update-controller' );
 
-				// do_settings_sections() は設定セクションとフィールドを出力.
+				// do_settings_sections() で設定セクションとフィールドを出力.
 				do_settings_sections( 'fauc-forced-auto-update-controller' );
 
 				// 「変更を保存」ボタンを出力.
@@ -133,7 +131,7 @@ class FAUC_Auto_update_Controller {
 		// ドメインパターン入力フィールド.
 		add_settings_field(
 			'FAUC_forced_auto_update_domain_field',
-			__( '本番環境URL(ドメイン)パターン', 'forced-auto-update-controller' ),
+			__( '自動更新を強制的に有効化する URL (ドメイン)パターン', 'forced-auto-update-controller' ),
 			array( $this, 'domain_field_callback' ),
 			'fauc-forced-auto-update-controller',
 			'FAUC_forced_auto_update_section'
@@ -203,7 +201,7 @@ class FAUC_Auto_update_Controller {
 	public function settings_section_callback() {
 		echo '<p>';
 		echo esc_html__(
-			'指定したドメイン(本番環境)では自動アップデートを強制的に有効化し、それ以外の環境ではすべて無効化します。ただし、下記のチェックリストで除外したプラグイン・テーマは自動更新されません。',
+			'指定したドメインに合致した場合は自動アップデートを強制的に有効化します。ただし、下記のチェックリストで除外したプラグイン・テーマは自動更新されません。',
 			'forced-auto-update-controller'
 		);
 		echo '</p>';
@@ -237,7 +235,7 @@ class FAUC_Auto_update_Controller {
 		$all_plugins = get_plugins(); // [ plugin_file => array( 'Name' => 'xxx', ... ), ... ]
 
 		if ( ! empty( $all_plugins ) ) {
-			echo '<p>' . esc_html__( 'チェックを入れると「自動更新対象から外す」プラグインになります。', 'forced-auto-update-controller' ) . '</p>';
+			echo '<p>' . esc_html__( 'チェックを入れると「自動更新の対象から外す」プラグインになります。', 'forced-auto-update-controller' ) . '</p>';
 			echo '<ul>';
 			foreach ( $all_plugins as $plugin_file => $plugin_data ) {
 				$plugin_name = $plugin_data['Name'];
@@ -269,7 +267,7 @@ class FAUC_Auto_update_Controller {
 		$all_themes = wp_get_themes(); // [ 'twentytwentytwo' => WP_Theme, ... ]
 
 		if ( ! empty( $all_themes ) ) {
-			echo '<p>' . esc_html__( 'チェックを入れると「自動更新対象から外す」テーマになります。', 'forced-auto-update-controller' ) . '</p>';
+			echo '<p>' . esc_html__( 'チェックを入れると「自動更新の対象から外す」テーマになります。', 'forced-auto-update-controller' ) . '</p>';
 			echo '<ul>';
 			foreach ( $all_themes as $theme_slug => $theme_obj ) {
 				$theme_name = $theme_obj->get( 'Name' );
@@ -322,17 +320,17 @@ class FAUC_Auto_update_Controller {
 	}
 
 	/**
-	 * (1) Git(VCS) 下でも自動更新を許可するかどうか制御
+	 * (1) Git などのバージョン管理下でも自動更新を許可するかどうか制御
 	 *
-	 * @param bool $checkout true: VCS管理下, false: 非管理
+	 * @param bool $checkout true: バージョン管理下, false: 非管理
 	 * @return bool
 	 */
 	public function control_vcs_check( $checkout ) {
 		if ( $this->is_production_domain() ) {
-			// 本番なら VCS チェックを無効化 => false で自動更新を許可.
+			// ドメインパターンと合致したら VCS チェックを無効化 => false で自動更新を許可.
 			return false;
 		}
-		// 非本番はデフォルト挙動に従う.
+		// パターンと合致しない場合はデフォルトの挙動に従う.
 		return $checkout;
 	}
 
@@ -343,7 +341,7 @@ class FAUC_Auto_update_Controller {
 	 * @return bool
 	 */
 	public function control_auto_update_core( $update ) {
-		// 本番環境かどうか
+		// ドメインパターンと合致するかどうか
 		return $this->is_production_domain();
 	}
 
@@ -355,21 +353,21 @@ class FAUC_Auto_update_Controller {
 	 * @return bool
 	 */
 	public function control_auto_update_plugin( $update, $item ) {
-		// 「除外リスト」に含まれていれば false を返す
+		// 「除外リスト」に含まれていれば false を返す.
 		$excluded_plugins = get_option( $this->option_name . '_excluded_plugins', array() );
 
 		if ( isset( $item->plugin ) && in_array( $item->plugin, $excluded_plugins, true ) ) {
-			return false; // チェック済み → 自動更新除外
+			return false; // チェック済み → 自動更新除外.
 		}
 
-		// それ以外の場合は、本番なら自動更新許可、非本番なら拒否
+		// それ以外の場合、ドメインパターンと合致するなら自動更新許可、合致しないなら拒否.
 		return $this->is_production_domain();
 	}
 
 	/**
 	 * (4) テーマ自動更新フィルタ
 	 *
-	 * @param bool   $update (true=許可/false=拒否)
+	 * @param bool   $update (true=許可, false=拒否)
 	 * @param object $item   テーマ情報 ($item->theme = 'twentytwentytwo' 等)
 	 * @return bool
 	 */
@@ -377,7 +375,7 @@ class FAUC_Auto_update_Controller {
 		$excluded_themes = get_option( $this->option_name . '_excluded_themes', array() );
 
 		if ( isset( $item->theme ) && in_array( $item->theme, $excluded_themes, true ) ) {
-			return false; // 除外
+			return false; // 除外.
 		}
 
 		return $this->is_production_domain();
@@ -414,7 +412,7 @@ class FAUC_Auto_update_Controller {
 	}
 
 	/**
-	 * (8) 管理者 & 本番環境のみ、ダッシュボードにメタボックスを追加
+	 * (8) 管理者の場合のみ、ダッシュボードにメタボックスを追加
 	 *
 	 * @return void
 	 */
@@ -424,8 +422,16 @@ class FAUC_Auto_update_Controller {
 			return;
 		}
 
-		// 本番環境かどうかを確認.
+		// 指定されたドメインパターンと合致するかどうかを確認.
 		if ( $this->is_production_domain() ) {
+			// パターンと合致した場合.
+			wp_add_dashboard_widget(
+				'fauc_git_integration_warning',
+				__( 'Forced Auto Update Controller Notice', 'forced-auto-update-controller' ),
+				array( $this, 'render_dashboard_meta_box_warning_match_specified_domain_pattern' )
+			);
+		} else {
+			// それ以外.
 			wp_add_dashboard_widget(
 				'fauc_git_integration_warning',
 				__( 'Forced Auto Update Controller Notice', 'forced-auto-update-controller' ),
@@ -437,15 +443,52 @@ class FAUC_Auto_update_Controller {
 	/**
 	 * ダッシュボードメタボックスに表示する内容
 	 *
+	 * パターンと合致した場合
+	 *
+	 * @return void
+	 */
+	public function render_dashboard_meta_box_warning_match_specified_domain_pattern() {
+		// メタボックスのコンテンツをラップする div にクラスを追加.
+		echo '<div class="forced-auto-update-warning match-pattern">';
+
+		// メッセージを出力.
+		// __() 関数を使用して翻訳可能な文字列を取得し、wp_kses_post() で許可された HTML タグのみを許可.
+		echo wp_kses_post(
+			__(
+				'<h3 style="font-weight:700;">このサイトに関する注意事項</h3>
+				<p>このサイトは Git などでバージョン管理されていますが、Forced Auto update Controller プラグインにより自動更新が強制的に有効になっています。</p>
+				<p>サーバー上のファイルが自動で更新され、Git などバージョン管理との整合が崩れる恐れがありますので、作業着手前にドメインで指定された環境の差分をコミットする、あるいは差分をいったんすべて削除してからデプロイするなど、Git との連携において留意すべき点があることに充分注意してください。</p>',
+				'forced-auto-update-controller'
+			)
+		);
+
+		// ラップ用の div を閉じる.
+		echo '</div>';
+	}
+
+	/**
+	 * ダッシュボードメタボックスに表示する内容
+	 *
+	 * パターンと合致しなかった場合
+	 *
 	 * @return void
 	 */
 	public function render_dashboard_meta_box_warning() {
-		echo '<p>';
-		echo esc_html__(
-			'このサイトは Git 管理されていますが、Forced Auto update Controller プラグインの設定により自動更新が有効にできるようになっています。
-サーバ上のファイルが自動で更新され、Git 管理との整合が崩れる恐れがありますので、更新後に差分をコミットする、あるいはステージング環境でテストした後に本番へ手動デプロイするなど、Git との連携において留意すべき点があることに充分注意してください',
-			'forced-auto-update-controller'
+		// メタボックスのコンテンツをラップする div にクラスを追加.
+		echo '<div class="forced-auto-update-warning">';
+
+		// メッセージを出力.
+		// __() 関数を使用して翻訳可能な文字列を取得し、wp_kses_post() で許可された HTML タグのみを許可.
+		echo wp_kses_post(
+			__(
+				'<h3 style="font-weight:700;">このサイトに関する注意事項</h3>
+				<p>このサイトは Git などでバージョン管理されていますが、Forced Auto update Controller プラグインのドメインパターンに合致したサイト（公開環境など）では自動更新が有効になっています。</p>
+				<p>この場合、ドメインパターンに合致したサイトではサーバー上のファイルが自動で更新され、Git などバージョン管理との整合が崩れる恐れがあります。<br>作業着手前にドメインで指定された環境の差分をコミットする、あるいは差分をいったんすべて削除してからデプロイするなど、Git との連携において留意すべき点があることに充分注意してください。</p>',
+				'forced-auto-update-controller'
+			)
 		);
-		echo '</p>';
+
+		// ラップ用の div を閉じる.
+		echo '</div>';
 	}
 }

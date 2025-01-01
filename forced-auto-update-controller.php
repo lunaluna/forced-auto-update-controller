@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Forced Auto Update Controller
- * Description: Git 管理下でも本番環境（指定ドメインパターンに合致）だけは自動更新をすべて有効化し、テスト環境・ローカル環境を無効化するプラグイン。他のテーマやプラグインが自動更新を無効化していても最終的に上書きします。
- * Version:     1.1.1
+ * Description: Git などファイルのバージョン管理下でも、指定したドメインパターンに合致した場合だけは自動更新を有効化するプラグイン。
+ * Version:     1.1.2
  * Author:      Hiroki Saiki
  * Author URI:  https://profiles.wordpress.org/lunaluna_dev/
  * License:     GPLv2 or later
@@ -16,22 +16,19 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * メインプラグインファイル
- *
- * 1. プラグイン有効化時に環境チェックを行う (PHP 7.4+, WP 6.0+)
- * 2. メインクラスを読み込み、インスタンス化
+ * プラグイン有効化時の環境チェック (PHP 7.4+, WP 6.0+)
  */
-
-// 1. プラグイン有効化時の環境チェック.
 require_once plugin_dir_path( __FILE__ ) . 'includes/functions-activation.php';
 register_activation_hook( __FILE__, 'fauc_check_environment' );
 
-// 2. メインクラスを読み込み・インスタンス化.
+/**
+ * メインクラスを読み込み、インスタンス化
+ */
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-fauc-forced-auto-update-controller.php';
 $fauc_auto_update_controller = new FAUC_Auto_update_Controller();
 
 /**
- * (3) プラグイン一覧のメタ情報欄に GitHub へのリンクを追加する関数
+ * プラグイン一覧のメタ情報欄に GitHub へのリンクを追加する関数
  *
  * - plugin_row_meta フィルタを使い、プラグインの行にカスタムリンクを追加
  *
@@ -47,7 +44,7 @@ function fauc_set_plugin_meta( $links, $file ) {
 
 	// プラグイン一覧で $file が実際にこのプラグインを指しているかどうかをチェック.
 	if ( $file === $this_plugin ) {
-		// リンクを追加 (例: GitHub リポジトリのURL).
+		// GitHub へのリンクを追加.
 		$links[] = sprintf(
 			'<a href="%s" target="_blank" rel="noopener noreferrer">%s</a>',
 			esc_url( 'https://github.com/lunaluna/forced-auto-update-controller' ),
