@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Forced Auto Update Controller
  * Description: Git などファイルのバージョン管理下でも、指定したドメインパターンに合致した場合だけは自動更新を有効化するプラグイン。
- * Version:     1.1.2
+ * Version:     1.1.3
  * Author:      Hiroki Saiki
  * Author URI:  https://profiles.wordpress.org/lunaluna_dev/
  * License:     GPLv2 or later
@@ -55,3 +55,24 @@ function fauc_set_plugin_meta( $links, $file ) {
 	return $links;
 }
 add_filter( 'plugin_row_meta', 'fauc_set_plugin_meta', 10, 2 );
+
+/**
+ * プラグイン一覧に「Settings」リンクを追加する関数
+ *
+ * @param array $links 既存のアクションリンク
+ *
+ * @return array 修正後のアクションリンク
+ */
+function fauc_add_settings_link( $links ) {
+    // オプションページへのURLを生成.
+    $settings_url = admin_url( 'options-general.php?page=fauc-forced-auto-update-controller' );
+
+    // 「Settings」リンクを作成.
+    $settings_link = '<a href="' . esc_url( $settings_url ) . '">' . __( 'Settings' ) . '</a>';
+
+    // 既存のリンク配列の先頭に「Settings」リンクを追加.
+    array_unshift( $links, $settings_link );
+
+    return $links;
+}
+add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), 'fauc_add_settings_link' );

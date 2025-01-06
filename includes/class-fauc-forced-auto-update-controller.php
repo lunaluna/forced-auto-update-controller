@@ -305,9 +305,9 @@ class FAUC_Auto_update_Controller {
 	}
 
 	/**
-	 * 現在の環境が本番環境かどうかを判定
+	 * 現在の環境がパターンに一致するか（本番環境か）どうかを判定
 	 *
-	 * @return bool true: 本番 / false: 非本番
+	 * @return bool true: 一致（本番） / false: 不一致（非本番）
 	 */
 	private function is_production_domain() {
 		$pattern = get_option( $this->option_name );
