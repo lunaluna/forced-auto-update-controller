@@ -2,7 +2,7 @@
 Tags: update
 Requires at least: 6.0
 Tested up to: 6.7
-Stable tag: 1.1.3
+Stable tag: 1.1.4
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -14,6 +14,9 @@ Forced Auto update Controller is a plugin that allows you to enable automatic up
 2. Activate the plugin through the \'Plugins\' menu in WordPress.
 
 == Changelog ==
+
+= 1.1.4 =
+* Fix a bug that prevented automatic updates from being enabled when the public URL contained a subdirectory.
 
 = 1.1.3 =
 * Add a settings page's link to the plugin actions.

@@ -1,6 +1,6 @@
 <?php
 /**
- * FAUC_Forced_Auto_update_Controller クラスファイル
+ * FAUC_Auto_update_Controller クラスファイル
  *
  * ドメインパターンを指定し、パターンが一致したら
  *   - コア/プラグイン/テーマ/翻訳ファイルの自動更新を強制的に有効化
@@ -13,7 +13,7 @@
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
-	exit;
+	exit; // 直接のアクセスを防止.
 }
 
 /**
@@ -99,6 +99,9 @@ class FAUC_Auto_update_Controller {
 			<h1><?php echo esc_html__( 'Forced Auto Update Control 設定', 'forced-auto-update-controller' ); ?></h1>
 			<form action="options.php" method="post">
 				<?php
+				// settings_errors() で設定エラーを表示.
+				settings_errors( 'fauc-forced-auto-update-controller-notices' );
+
 				// settings_fields() で nonce 等のセキュリティフィールドを出力.
 				settings_fields( 'fauc-forced-auto-update-controller' );
 
@@ -160,14 +163,16 @@ class FAUC_Auto_update_Controller {
 		);
 
 		/**
-		 * register_setting: 2つのオプションを追加
+		 * register_setting: 3つのオプションを追加
 		 */
+
+		// ドメインパターン.
 		register_setting(
 			'fauc-forced-auto-update-controller',
 			$this->option_name,
 			array(
 				'type'              => 'string',
-				'sanitize_callback' => 'sanitize_text_field',
+				'sanitize_callback' => array( $this, 'sanitize_domain_pattern' ), // カスタムサニタイズ関数.
 				'default'           => '',
 			)
 		);
@@ -214,11 +219,12 @@ class FAUC_Auto_update_Controller {
 	 */
 	public function domain_field_callback() {
 		$value = get_option( $this->option_name );
+		echo '<p>' . esc_html__( 'ここに有効化したいサイトのドメインを入力します。サブディレクトリで公開している場合はサブディレクトリも含めてください。「https://」や最後の「/」は不要です。', 'forced-auto-update-controller' ) . '</p>';
 		printf(
 			'<input type="text" name="%1$s" value="%2$s" class="regular-text" placeholder="%3$s" />',
 			esc_attr( $this->option_name ),
 			esc_attr( $value ),
-			esc_attr__( '例: example.com', 'forced-auto-update-controller' )
+			esc_attr__( '例: example.com、example.com/sample など', 'forced-auto-update-controller' )
 		);
 	}
 
@@ -287,10 +293,53 @@ class FAUC_Auto_update_Controller {
 	}
 
 	/**
+	 * ドメインパターンのサニタイズおよびバリデーションコールバック
+	 *
+	 * @param string $input ユーザー入力値.
+	 * @return string サニタイズおよびバリデーション後の値.
+	 */
+	public function sanitize_domain_pattern( $input ) {
+		// トリムして空白を削除.
+		$pattern = trim( $input );
+
+		// 先頭の 'https://' または 'http://' を削除.
+		$pattern = preg_replace( '#^https?://#i', '', $pattern );
+
+		// 末尾の '/' を削除.
+		$pattern = rtrim( $pattern, '/' );
+
+		// パターンが空になったら設定エラーを追加し、空文字列を返す.
+		if ( empty( $pattern ) ) {
+			add_settings_error(
+				'fauc-forced-auto-update-controller-notices',
+				'FAUC_invalid_domain_pattern',
+				__( 'ドメインパターンが無効です。正しい形式で入力してください。', 'forced-auto-update-controller' ),
+				'error'
+			);
+			return '';
+		}
+
+		// ドメイン名とパスの形式を検証.
+		// 例: example.com や example.com/sample
+		if ( ! preg_match( '/^[a-z0-9.-]+\.[a-z]{2,}(\/[a-z0-9_-]+)?$/i', $pattern ) ) {
+			add_settings_error(
+				'fauc-forced-auto-update-controller-notices',
+				'FAUC_invalid_domain_pattern_format',
+				__( 'ドメインパターンの形式が正しくありません。例: example.com、example.com/sample など', 'forced-auto-update-controller' ),
+				'error'
+			);
+			return '';
+		}
+
+		// パターンが有効な場合は返す.
+		return $pattern;
+	}
+
+	/**
 	 * チェックリストのサニタイズコールバック
 	 *
 	 * @param array $input ユーザー送信値
-	 * @return array
+	 * @return array サニタイズ後の値
 	 */
 	public function sanitize_checklist( $input ) {
 		if ( ! is_array( $input ) ) {
@@ -310,12 +359,72 @@ class FAUC_Auto_update_Controller {
 	 * @return bool true: 一致（本番） / false: 不一致（非本番）
 	 */
 	private function is_production_domain() {
+		// 管理画面で設定されたパターンを取得.
 		$pattern = get_option( $this->option_name );
-		$host    = isset( $_SERVER['HTTP_HOST'] ) ? $_SERVER['HTTP_HOST'] : '';
 
-		if ( ! empty( $pattern ) && ! empty( $host ) && false !== strpos( $host, $pattern ) ) {
+		// パターンが取得できなかったら false を返す（自動更新にしない）.
+		if ( empty( $pattern ) ) {
+			return false;
+		}
+
+		// 先頭の 'https://' または 'http://' を削除.
+		$pattern = preg_replace( '#^https?://#i', '', $pattern );
+
+		// 末尾の '/' を削除.
+		$pattern = rtrim( $pattern, '/' );
+
+		// 再度パターンが空かどうかを確認.
+		if ( empty( $pattern ) ) {
+			return false;
+		}
+
+		// ドメインパターンが有効な形式でない場合も判定を行わない.
+		if ( ! preg_match( '/^[a-z0-9.-]+\.[a-z]{2,}(\/[a-z0-9_-]+)?$/i', $pattern ) ) {
+			return false;
+		}
+
+		// home_url() をパースして、ドメイン名とパスを取得.
+		$url_parts = parse_url( home_url() );
+
+		// URL がパースできなければ判定不能として false を返す（自動更新にしない）.
+		if ( empty( $url_parts ) ) {
+			return false;
+		}
+
+		// ドメイン部分とパス部分の変数を宣言.
+		$host = '';
+		$path = '';
+
+		// ドメイン部分を取得.
+		if ( isset( $url_parts['host'] ) ) {
+			$host = $url_parts['host'];
+		}
+
+		// ドメイン部分を取得できなければ判定不能として false を返す（自動更新にしない）.
+		if ( empty( $host ) ) {
+			return false;
+		}
+
+		// パス部分を取得.
+		// パス部分は空になる可能性もある.
+		if ( isset( $url_parts['path'] ) ) {
+			// trim() で先頭と末尾の '/' をすべて除去.
+			// 例: '/wordpress/' なら 'wordpress'、'/' なら '' になる.
+			$path = trim( $url_parts['path'], '/' );
+		}
+
+		// ドメインとパスを結合.
+		// パスが空でなければ、ドメインのあとに '/' を挟んでからパスを付与.
+		$host_with_path = $host;
+		if ( $path !== '' ) {
+			$host_with_path .= '/' . $path;
+		}
+
+		// パターンと完全に一致する場合のみ true を返す.
+		if ( $host_with_path === $pattern ) {
 			return true;
 		}
+
 		return false;
 	}
 
@@ -492,3 +601,6 @@ class FAUC_Auto_update_Controller {
 		echo '</div>';
 	}
 }
+
+// インスタンスを生成.
+new FAUC_Auto_update_Controller();
