@@ -1,4 +1,4 @@
-=== Forced Auto update Controller ===
+=== Forced Auto Update Controller ===
 Tags: update
 Requires at least: 6.0
 Tested up to: 6.7
@@ -14,6 +14,9 @@ Forced Auto update Controller is a plugin that allows you to enable automatic up
 2. Activate the plugin through the \'Plugins\' menu in WordPress.
 
 == Changelog ==
+
+= 1.1.5 =
+* Add a checkbox to hide update information on the dashboard.
 
 = 1.1.4 =
 * Fix a bug that prevented automatic updates from being enabled when the public URL contained a subdirectory.

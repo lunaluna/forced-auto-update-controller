@@ -8,6 +8,7 @@
  *   - ただし、チェックが入っているプラグイン・テーマは自動更新を除外
  * それ以外の環境では自動更新を無効化し、UI も非表示にする
  * 優先度 9999 を指定して最終的に上書き
+ * さらにオプションとして「WordPress本体のアップデート通知」を非表示にする機能を追加
  *
  * @package ForcedAutoUpdateController
  */
@@ -22,7 +23,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class FAUC_Auto_update_Controller {
 
 	/**
-	 * 保存するオプション名 (DB 上のキー)
+	 * 保存するオプション名 (DB 上のキーのベース)
 	 *
 	 * @var string
 	 */
@@ -64,6 +65,18 @@ class FAUC_Auto_update_Controller {
 
 		// (8) 管理者のみダッシュボードにメタボックス追加.
 		add_action( 'wp_dashboard_setup', array( $this, 'add_dashboard_meta_box_warning' ) );
+
+		/**
+		 * (9) WordPress本体のアップデート通知を非表示にする
+		 *     - 「Update 通知設定」でチェックが入っている場合にのみ実行する
+		 *     - 更新バッジやダッシュボード上部のバナーを制御するフィルター: wp_get_update_data
+		 */
+		add_filter( 'wp_get_update_data', array( $this, 'hide_wordpress_update_notifications' ), 9999 );
+
+		/**
+		 *  (9-1) コアアップデートがある際に管理画面上部に表示されるバナー “WordPress x.x.x が利用可能です” を削除
+		 */
+		add_action( 'admin_head', array( $this, 'remove_update_nag_for_core' ), 9999 );
 	}
 
 	/**
@@ -123,6 +136,11 @@ class FAUC_Auto_update_Controller {
 	 */
 	public function settings_init() {
 
+		/**
+		 * -----------------------
+		 * Auto Updates 設定セクション
+		 * -----------------------
+		 */
 		// セクション登録.
 		add_settings_section(
 			'FAUC_forced_auto_update_section',
@@ -139,10 +157,6 @@ class FAUC_Auto_update_Controller {
 			'fauc-forced-auto-update-controller',
 			'FAUC_forced_auto_update_section'
 		);
-
-		/**
-		 * ここからプラグイン・テーマのチェックリスト用
-		 */
 
 		// プラグインのチェックリスト.
 		add_settings_field(
@@ -163,7 +177,29 @@ class FAUC_Auto_update_Controller {
 		);
 
 		/**
-		 * register_setting: 3つのオプションを追加
+		 * -----------------------
+		 * Update 通知設定セクション
+		 * -----------------------
+		 */
+		// セクション登録.
+		add_settings_section(
+			'FAUC_update_notifications_section',
+			__( 'Update 通知設定', 'forced-auto-update-controller' ),
+			array( $this, 'update_notifications_section_callback' ),
+			'fauc-forced-auto-update-controller'
+		);
+
+		// WordPress本体のアップデート通知を非表示にするチェックボックス.
+		add_settings_field(
+			'FAUC_hide_wordpress_updates_field',
+			__( 'WordPress本体の更新通知を非表示にする', 'forced-auto-update-controller' ),
+			array( $this, 'hide_wordpress_updates_field_callback' ),
+			'fauc-forced-auto-update-controller',
+			'FAUC_update_notifications_section'
+		);
+
+		/**
+		 * それぞれの設定値を register_setting で登録
 		 */
 
 		// ドメインパターン.
@@ -176,6 +212,7 @@ class FAUC_Auto_update_Controller {
 				'default'           => '',
 			)
 		);
+
 		// プラグイン除外リスト.
 		register_setting(
 			'fauc-forced-auto-update-controller',
@@ -186,6 +223,7 @@ class FAUC_Auto_update_Controller {
 				'default'           => array(),
 			)
 		);
+
 		// テーマ除外リスト.
 		register_setting(
 			'fauc-forced-auto-update-controller',
@@ -196,10 +234,21 @@ class FAUC_Auto_update_Controller {
 				'default'           => array(),
 			)
 		);
+
+		// WordPress本体のアップデート通知を非表示にする.
+		register_setting(
+			'fauc-forced-auto-update-controller',
+			$this->option_name . '_hide_wp_updates',
+			array(
+				'type'              => 'boolean',
+				'sanitize_callback' => 'rest_sanitize_boolean',
+				'default'           => false,
+			)
+		);
 	}
 
 	/**
-	 * セクション説明文
+	 * 「Auto Updates 設定」セクション説明文
 	 *
 	 * @return void
 	 */
@@ -207,6 +256,20 @@ class FAUC_Auto_update_Controller {
 		echo '<p>';
 		echo esc_html__(
 			'指定したドメインに合致した場合は自動アップデートを強制的に有効化します。ただし、下記のチェックリストで除外したプラグイン・テーマは自動更新されません。',
+			'forced-auto-update-controller'
+		);
+		echo '</p>';
+	}
+
+	/**
+	 * 「Update 通知設定」セクション説明文
+	 *
+	 * @return void
+	 */
+	public function update_notifications_section_callback() {
+		echo '<p>';
+		echo esc_html__(
+			'WordPress本体のみ、更新通知（バナーやボタン、更新ページの文言など）を非表示にできます。プラグイン・テーマの更新通知はそのまま表示されます。',
 			'forced-auto-update-controller'
 		);
 		echo '</p>';
@@ -293,6 +356,25 @@ class FAUC_Auto_update_Controller {
 	}
 
 	/**
+	 * WordPress本体のアップデート通知を非表示にするチェックボックスのHTMLを出力
+	 *
+	 * @return void
+	 */
+	public function hide_wordpress_updates_field_callback() {
+		// 現在の値を取得 (true/false).
+		$option  = get_option( $this->option_name . '_hide_wp_updates', false );
+		$checked = $option ? 'checked' : '';
+
+		// チェックボックスを表示.
+		printf(
+			'<label><input type="checkbox" name="%1$s" value="1" %2$s /> %3$s</label>',
+			esc_attr( $this->option_name . '_hide_wp_updates' ),
+			$checked,
+			esc_html__( 'チェックを入れると WordPress の更新通知が非表示になります。', 'forced-auto-update-controller' )
+		);
+	}
+
+	/**
 	 * ドメインパターンのサニタイズおよびバリデーションコールバック
 	 *
 	 * @param string $input ユーザー入力値.
@@ -319,8 +401,7 @@ class FAUC_Auto_update_Controller {
 			return '';
 		}
 
-		// ドメイン名とパスの形式を検証.
-		// 例: example.com や example.com/sample
+		// ドメイン名とパスの形式を検証 (例: example.com や example.com/sample).
 		if ( ! preg_match( '/^[a-z0-9.-]+\.[a-z]{2,}(\/[a-z0-9_-]+)?$/i', $pattern ) ) {
 			add_settings_error(
 				'fauc-forced-auto-update-controller-notices',
@@ -391,36 +472,23 @@ class FAUC_Auto_update_Controller {
 			return false;
 		}
 
-		// ドメイン部分とパス部分の変数を宣言.
-		$host = '';
-		$path = '';
-
-		// ドメイン部分を取得.
-		if ( isset( $url_parts['host'] ) ) {
-			$host = $url_parts['host'];
-		}
+		// ドメイン部分とパス部分を取得.
+		$host = isset( $url_parts['host'] ) ? $url_parts['host'] : '';
+		$path = isset( $url_parts['path'] ) ? trim( $url_parts['path'], '/' ) : '';
 
 		// ドメイン部分を取得できなければ判定不能として false を返す（自動更新にしない）.
 		if ( empty( $host ) ) {
 			return false;
 		}
 
-		// パス部分を取得.
-		// パス部分は空になる可能性もある.
-		if ( isset( $url_parts['path'] ) ) {
-			// trim() で先頭と末尾の '/' をすべて除去.
-			// 例: '/wordpress/' なら 'wordpress'、'/' なら '' になる.
-			$path = trim( $url_parts['path'], '/' );
-		}
-
-		// ドメインとパスを結合.
+		// host + path で比較用文字列を作成.
 		// パスが空でなければ、ドメインのあとに '/' を挟んでからパスを付与.
 		$host_with_path = $host;
 		if ( $path !== '' ) {
 			$host_with_path .= '/' . $path;
 		}
 
-		// パターンと完全に一致する場合のみ true を返す.
+		// パターンと完全一致する場合のみ true.
 		if ( $host_with_path === $pattern ) {
 			return true;
 		}
@@ -550,8 +618,7 @@ class FAUC_Auto_update_Controller {
 	}
 
 	/**
-	 * ダッシュボードメタボックスに表示する内容
-	 *
+	 * (8-1) ダッシュボードメタボックスに表示する内容
 	 * パターンと合致した場合
 	 *
 	 * @return void
@@ -576,8 +643,7 @@ class FAUC_Auto_update_Controller {
 	}
 
 	/**
-	 * ダッシュボードメタボックスに表示する内容
-	 *
+	 * (8-2) ダッシュボードメタボックスに表示する内容
 	 * パターンと合致しなかった場合
 	 *
 	 * @return void
@@ -599,6 +665,54 @@ class FAUC_Auto_update_Controller {
 
 		// ラップ用の div を閉じる.
 		echo '</div>';
+	}
+
+	/**
+	 * (9) WordPress本体のアップデート通知（バッジなど）を非表示にする処理
+	 *
+	 * @param array $update_data WP の更新情報（連想配列）
+	 * @return array $update_data 加工後の更新情報
+	 */
+	public function hide_wordpress_update_notifications( $update_data ) {
+		// 「Update 通知設定」でチェックが入っているかどうか.
+		if ( $this->should_hide_wp_update_notifications() ) {
+			// WordPress本体の更新数を取得（通常 0 or 1 だが念のため変数へ）
+			$wordpress_count = isset( $update_data['counts']['wordpress'] ) ? $update_data['counts']['wordpress'] : 0;
+
+			// 全体の合計から WordPress本体の更新数を引く (0 であれば何もしない).
+			if ( $wordpress_count > 0 && isset( $update_data['counts']['total'] ) ) {
+				$update_data['counts']['total'] -= $wordpress_count;
+			}
+
+			// WordPress本体の更新数を強制的に 0 にする.
+			$update_data['counts']['wordpress'] = 0;
+		}
+
+		return $update_data;
+	}
+
+	/**
+	 * (9-1) コアアップデートがある際に管理画面上部に表示されるバナー “WordPress x.x.x が利用可能です” を削除
+	 * （update_nag は WordPress本体更新用の通知に限るので、プラグイン更新には影響しない）
+	 *
+	 * @return void
+	 */
+	public function remove_update_nag_for_core() {
+		if ( $this->should_hide_wp_update_notifications() ) {
+			// update_nag フックを削除する → WPコア向けバナーの削除
+			remove_action( 'admin_notices', 'update_nag', 3 );
+		}
+	}
+
+	/**
+	 * WP本体の更新通知を非表示にする設定かどうか
+	 *
+	 * @return bool
+	 */
+	private function should_hide_wp_update_notifications() {
+		// オプションが true (1) なら隠す設定.
+		$hide_wp_updates = get_option( $this->option_name . '_hide_wp_updates', false );
+		return (bool) $hide_wp_updates;
 	}
 }
 
