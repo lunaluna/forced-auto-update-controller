@@ -16,7 +16,7 @@ Forced Auto update Controller is a plugin that allows you to enable automatic up
 == Changelog ==
 
 = 1.1.5 =
-* Add a checkbox to hide update infomation on the dashboard.
+* Add a checkbox to hide update information on the dashboard.
 
 = 1.1.4 =
 * Fix a bug that prevented automatic updates from being enabled when the public URL contained a subdirectory.

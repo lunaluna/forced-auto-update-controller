@@ -67,13 +67,16 @@ class FAUC_Auto_update_Controller {
 		add_action( 'wp_dashboard_setup', array( $this, 'add_dashboard_meta_box_warning' ) );
 
 		/**
-		 * (9) WordPress本体のアップデート通知を非表示にするフィルター
-		 *   - 『Update 通知設定』でチェックされていた場合のみ実行
-		 *   - wp_get_update_data フィルターを使い、WordPress本体の更新数を 0 にする
-		 *   - これにより「WordPress xxx が利用可能です」のダッシュボード通知・
-		 *     左メニューの更新バッジ・更新ページの「WordPress の新しいバージョンがあります」を非表示にできる
+		 * (9) WordPress本体のアップデート通知を非表示にする
+		 *     - 「Update 通知設定」でチェックが入っている場合にのみ実行する
+		 *     - 更新バッジやダッシュボード上部のバナーを制御するフィルター: wp_get_update_data
 		 */
 		add_filter( 'wp_get_update_data', array( $this, 'hide_wordpress_update_notifications' ), 9999 );
+
+		/**
+		 *  (9-1) コアアップデートがある際に管理画面上部に表示されるバナー “WordPress x.x.x が利用可能です” を削除
+		 */
+		add_action( 'admin_head', array( $this, 'remove_update_nag_for_core' ), 9999 );
 	}
 
 	/**
@@ -266,7 +269,7 @@ class FAUC_Auto_update_Controller {
 	public function update_notifications_section_callback() {
 		echo '<p>';
 		echo esc_html__(
-			'更新通知（ダッシュボード、メニューのバッジ、更新ページの「新しいバージョンが…」）を非表示にできます。',
+			'WordPress本体のみ、更新通知（バナーやボタン、更新ページの文言など）を非表示にできます。プラグイン・テーマの更新通知はそのまま表示されます。',
 			'forced-auto-update-controller'
 		);
 		echo '</p>';
@@ -665,13 +668,7 @@ class FAUC_Auto_update_Controller {
 	}
 
 	/**
-	 * (9) WordPress本体のアップデート通知を非表示にする
-	 *
-	 * - 「Update 通知設定」でチェックが入っている場合にのみ実行
-	 * - wp_get_update_data フィルターを利用し、WordPress の更新数を 0 に設定する
-	 * - 結果としてダッシュボードの「WordPress xxxが利用可能です」、管理画面左カラムの更新バッジ、
-	 *   更新ページでの「WordPress の新しいバージョンがあります」が非表示になる
-	 * - プラグインやテーマの更新はそのまま表示される
+	 * (9) WordPress本体のアップデート通知（バッジなど）を非表示にする処理
 	 *
 	 * @param array $update_data WP の更新情報（連想配列）
 	 * @return array $update_data 加工後の更新情報
@@ -692,6 +689,19 @@ class FAUC_Auto_update_Controller {
 		}
 
 		return $update_data;
+	}
+
+	/**
+	 * (9-1) コアアップデートがある際に管理画面上部に表示されるバナー “WordPress x.x.x が利用可能です” を削除
+	 * （update_nag は WordPress本体更新用の通知に限るので、プラグイン更新には影響しない）
+	 *
+	 * @return void
+	 */
+	public function remove_update_nag_for_core() {
+		if ( $this->should_hide_wp_update_notifications() ) {
+			// update_nag フックを削除する → WPコア向けバナーの削除
+			remove_action( 'admin_notices', 'update_nag', 3 );
+		}
 	}
 
 	/**
