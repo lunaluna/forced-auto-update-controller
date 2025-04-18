@@ -15,35 +15,38 @@ Forced Auto update Controller is a plugin that allows you to enable automatic up
 
 == Changelog ==
 
+= 1.2.0 =
+* Fixed the toggle to enable whether or not to major update the core on the WordPress update page.
+
 = 1.1.5 =
-* Add a checkbox to hide update information on the dashboard.
+* Added a checkbox to hide update information on the dashboard.
 
 = 1.1.4 =
-* Fix a bug that prevented automatic updates from being enabled when the public URL contained a subdirectory.
+* Fixed a bug that prevented automatic updates from being enabled when the public URL contained a subdirectory.
 
 = 1.1.3 =
-* Add a settings page's link to the plugin actions.
+* Added a settings page's link to the plugin actions.
 
 = 1.1.2 =
-* Update texts and meta boxes.
+* Updated texts and meta boxes.
 
 = 1.1.1 =
 * Fixed correct deletion of data when uninstalling this plugin.
 
 = 1.1.0 =
-* Add a function that allows you to select plugins and themes that are not subject to automatic updates.
+* Added a function that allows you to select plugins and themes that are not subject to automatic updates.
 
 = 1.0.4 =
-* Fix the hook name.
+* Fixed the hook name.
 
 = 1.0.3 =
-* Add a GitHub link to the plugin metadata.
+* Added a GitHub link to the plugin metadata.
 
 = 1.0.2 =
-* Fix a fatal error.
+* Fixed a fatal error.
 
 = 1.0.1 =
-* Add metabox to administrators' Dashboard.
+* Added metabox to administrators' Dashboard.
 * Some code format.
 
 = 1.0.0 =

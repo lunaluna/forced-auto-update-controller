@@ -518,8 +518,19 @@ class FAUC_Auto_update_Controller {
 	 * @return bool
 	 */
 	public function control_auto_update_core( $update ) {
-		// ドメインパターンと合致するかどうか
-		return $this->is_production_domain();
+		/**
+		 * ドメインパターンと合致するかどうか.
+		 */
+		// 対象ドメインでない場合は false を返す.
+		if ( ! $this->is_production_domain() ) {
+			return false;
+		}
+
+		// WordPress の標準設定 'auto_update_core_major' を読み込む.
+		$allow_major = get_option( 'auto_update_core_major', false );
+
+		// $allow_major が true の場合はメジャーも含めて更新、false の場合は minor のみに制限.
+		return $allow_major ? true : 'minor';
 	}
 
 	/**
