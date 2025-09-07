@@ -45,8 +45,8 @@ class FAUC_Auto_update_Controller {
 		// (1) バージョンコントロールのチェックを無効化.
 		add_filter( 'automatic_updates_is_vcs_checkout', array( $this, 'control_vcs_check' ), 10, 1 );
 
-		// (2) コア自動更新: 優先度 9999 で最終上書き.
-		add_filter( 'auto_update_core', array( $this, 'control_auto_update_core' ), 9999, 1 );
+		// (2) コア自動更新: 優先度 9999 で最終上書き.（引数2つに変更）
+		add_filter( 'auto_update_core', array( $this, 'control_auto_update_core' ), 9999, 2 );
 
 		// (3) プラグイン自動更新: 優先度 9999 で最終上書き. (チェックしたプラグインは除外)
 		add_filter( 'auto_update_plugin', array( $this, 'control_auto_update_plugin' ), 9999, 2 );
@@ -515,9 +515,10 @@ class FAUC_Auto_update_Controller {
 	 * (2) コア自動更新フィルタ
 	 *
 	 * @param bool $update コア自動更新許可フラグ
+	 * @param object $item アップデート情報
 	 * @return bool
 	 */
-	public function control_auto_update_core( $update ) {
+	public function control_auto_update_core( $update, $item ) {
 		/**
 		 * ドメインパターンと合致するかどうか.
 		 */
@@ -526,11 +527,16 @@ class FAUC_Auto_update_Controller {
 			return false;
 		}
 
-		// WordPress の標準設定 'auto_update_core_major' を読み込む.
-		$allow_major = get_option( 'auto_update_core_major', false );
+		// $item->response でアップデート種別を判定
+		// 'autoupdate' = マイナー, 'upgrade' = メジャー
+		if ( isset( $item->response ) && $item->response === 'upgrade' ) {
+			// メジャーアップデート
+			$allow_major = get_option( 'auto_update_core_major', false );
+			return $allow_major ? true : false;
+		}
 
-		// $allow_major が true の場合はメジャーも含めて更新、false の場合は minor のみに制限.
-		return $allow_major ? true : 'minor';
+		// マイナーアップデートは常に許可
+		return 'minor';
 	}
 
 	/**
