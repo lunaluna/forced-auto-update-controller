@@ -1,6 +1,6 @@
 <?php
 /**
- * FAUC_Auto_update_Controller クラスファイル
+ * FAUC_Auto_Update_Controller クラスファイル.
  *
  * ドメインパターンを指定し、パターンが一致したら
  *   - コア/プラグイン/テーマ/翻訳ファイルの自動更新を強制的に有効化
@@ -18,9 +18,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * メインクラス: FAUC_Auto_update_Controller
+ * メインクラス: FAUC_Auto_Update_Controller.
  */
-class FAUC_Auto_update_Controller {
+class FAUC_Auto_Update_Controller {
 
 	/**
 	 * 保存するオプション名 (DB 上のキーのベース)
@@ -45,22 +45,22 @@ class FAUC_Auto_update_Controller {
 		// (1) バージョンコントロールのチェックを無効化.
 		add_filter( 'automatic_updates_is_vcs_checkout', array( $this, 'control_vcs_check' ), 10, 1 );
 
-		// (2) コア自動更新: 優先度 9999 で最終上書き.（引数2つに変更）
+		// (2) コア自動更新: 優先度 9999 で最終上書き（引数 2 つに変更）.
 		add_filter( 'auto_update_core', array( $this, 'control_auto_update_core' ), 9999, 2 );
 
-		// (3) プラグイン自動更新: 優先度 9999 で最終上書き. (チェックしたプラグインは除外)
+		// (3) プラグイン自動更新: 優先度 9999 で最終上書き（チェックしたプラグインは除外）.
 		add_filter( 'auto_update_plugin', array( $this, 'control_auto_update_plugin' ), 9999, 2 );
 
-		// (4) テーマ自動更新: 優先度 9999 で最終上書き. (チェックしたテーマは除外)
+		// (4) テーマ自動更新: 優先度 9999 で最終上書き（チェックしたテーマは除外）.
 		add_filter( 'auto_update_theme', array( $this, 'control_auto_update_theme' ), 9999, 2 );
 
 		// (5) 翻訳ファイル自動更新: 優先度 9999 で最終上書き.
 		add_filter( 'auto_update_translation', array( $this, 'control_auto_update_translation' ), 9999, 1 );
 
-		// (6) プラグイン一覧の自動更新UI (WP5.5+): 優先度9999で最終上書き.
+		// (6) プラグイン一覧の自動更新 UI（WP5.5+）: 優先度 9999 で最終上書き.
 		add_filter( 'plugins_auto_update_enabled', array( $this, 'control_auto_update_ui_for_plugins' ), 9999, 1 );
 
-		// (7) テーマ一覧の自動更新UI (WP5.5+): 優先度9999で最終上書き.
+		// (7) テーマ一覧の自動更新 UI（WP5.5+）: 優先度 9999 で最終上書き.
 		add_filter( 'themes_auto_update_enabled', array( $this, 'control_auto_update_ui_for_themes' ), 9999, 1 );
 
 		// (8) 管理者のみダッシュボードにメタボックス追加.
@@ -300,20 +300,21 @@ class FAUC_Auto_update_Controller {
 		// 現在の除外設定を取得.
 		$excluded_plugins = get_option( $this->option_name . '_excluded_plugins', array() );
 
-		// 全プラグイン一覧を取得.
-		$all_plugins = get_plugins(); // [ plugin_file => array( 'Name' => 'xxx', ... ), ... ]
+		// インストール済みプラグインの一覧を取得する.
+		$all_plugins = get_plugins();
 
 		if ( ! empty( $all_plugins ) ) {
 			echo '<p>' . esc_html__( 'チェックを入れると「自動更新の対象から外す」プラグインになります。', 'forced-auto-update-controller' ) . '</p>';
 			echo '<ul>';
 			foreach ( $all_plugins as $plugin_file => $plugin_data ) {
 				$plugin_name = $plugin_data['Name'];
-				$checked     = in_array( $plugin_file, $excluded_plugins, true ) ? 'checked' : '';
+				$is_checked  = in_array( $plugin_file, $excluded_plugins, true );
+
 				printf(
 					'<li><label><input type="checkbox" name="%1$s[]" value="%2$s" %3$s /> %4$s</label></li>',
 					esc_attr( $this->option_name . '_excluded_plugins' ),
 					esc_attr( $plugin_file ),
-					$checked,
+					checked( $is_checked, true, false ),
 					esc_html( $plugin_name )
 				);
 			}
@@ -332,20 +333,20 @@ class FAUC_Auto_update_Controller {
 		// 現在の除外設定を取得.
 		$excluded_themes = get_option( $this->option_name . '_excluded_themes', array() );
 
-		// インストール済みテーマ一覧を取得.
-		$all_themes = wp_get_themes(); // [ 'twentytwentytwo' => WP_Theme, ... ]
+		// インストール済みテーマ一覧を取得する.
+		$all_themes = wp_get_themes();
 
 		if ( ! empty( $all_themes ) ) {
 			echo '<p>' . esc_html__( 'チェックを入れると「自動更新の対象から外す」テーマになります。', 'forced-auto-update-controller' ) . '</p>';
 			echo '<ul>';
 			foreach ( $all_themes as $theme_slug => $theme_obj ) {
 				$theme_name = $theme_obj->get( 'Name' );
-				$checked    = in_array( $theme_slug, $excluded_themes, true ) ? 'checked' : '';
+				$is_checked = in_array( $theme_slug, $excluded_themes, true );
 				printf(
 					'<li><label><input type="checkbox" name="%1$s[]" value="%2$s" %3$s /> %4$s</label></li>',
 					esc_attr( $this->option_name . '_excluded_themes' ),
 					esc_attr( $theme_slug ),
-					$checked,
+					checked( $is_checked, true, false ),
 					esc_html( $theme_name )
 				);
 			}
@@ -361,24 +362,23 @@ class FAUC_Auto_update_Controller {
 	 * @return void
 	 */
 	public function hide_wordpress_updates_field_callback() {
-		// 現在の値を取得 (true/false).
-		$option  = get_option( $this->option_name . '_hide_wp_updates', false );
-		$checked = $option ? 'checked' : '';
+		// 現在の値を取得（true/false）.
+		$option = get_option( $this->option_name . '_hide_wp_updates', false );
 
 		// チェックボックスを表示.
 		printf(
 			'<label><input type="checkbox" name="%1$s" value="1" %2$s /> %3$s</label>',
 			esc_attr( $this->option_name . '_hide_wp_updates' ),
-			$checked,
+			checked( $option, true, false ),
 			esc_html__( 'チェックを入れると WordPress の更新通知が非表示になります。', 'forced-auto-update-controller' )
 		);
 	}
 
 	/**
-	 * ドメインパターンのサニタイズおよびバリデーションコールバック
+	 * ドメインパターンのサニタイズおよびバリデーションコールバック.
 	 *
-	 * @param string $input ユーザー入力値.
-	 * @return string サニタイズおよびバリデーション後の値.
+	 * @param string $input ユーザー入力値です.
+	 * @return string サニタイズおよびバリデーション後の値です.
 	 */
 	public function sanitize_domain_pattern( $input ) {
 		// トリムして空白を削除.
@@ -417,10 +417,10 @@ class FAUC_Auto_update_Controller {
 	}
 
 	/**
-	 * チェックリストのサニタイズコールバック
+	 * チェックリストのサニタイズコールバック.
 	 *
-	 * @param array $input ユーザー送信値
-	 * @return array サニタイズ後の値
+	 * @param array $input ユーザー送信値です.
+	 * @return array サニタイズ後の値です.
 	 */
 	public function sanitize_checklist( $input ) {
 		if ( ! is_array( $input ) ) {
@@ -435,9 +435,9 @@ class FAUC_Auto_update_Controller {
 	}
 
 	/**
-	 * 現在の環境がパターンに一致するか（本番環境か）どうかを判定
+	 * 現在の環境がパターンに一致するか（本番環境か）どうかを判定.
 	 *
-	 * @return bool true: 一致（本番） / false: 不一致（非本番）
+	 * @return bool true: 一致（本番） / false: 不一致（非本番）です.
 	 */
 	private function is_production_domain() {
 		// 管理画面で設定されたパターンを取得.
@@ -465,7 +465,7 @@ class FAUC_Auto_update_Controller {
 		}
 
 		// home_url() をパースして、ドメイン名とパスを取得.
-		$url_parts = parse_url( home_url() );
+		$url_parts = wp_parse_url( home_url() );
 
 		// URL がパースできなければ判定不能として false を返す（自動更新にしない）.
 		if ( empty( $url_parts ) ) {
@@ -484,7 +484,7 @@ class FAUC_Auto_update_Controller {
 		// host + path で比較用文字列を作成.
 		// パスが空でなければ、ドメインのあとに '/' を挟んでからパスを付与.
 		$host_with_path = $host;
-		if ( $path !== '' ) {
+		if ( '' !== $path ) {
 			$host_with_path .= '/' . $path;
 		}
 
@@ -497,10 +497,10 @@ class FAUC_Auto_update_Controller {
 	}
 
 	/**
-	 * (1) Git などのバージョン管理下でも自動更新を許可するかどうか制御
+	 * (1) Git などのバージョン管理下でも自動更新を許可するかどうか制御.
 	 *
-	 * @param bool $checkout true: バージョン管理下, false: 非管理
-	 * @return bool
+	 * @param bool $checkout true: バージョン管理下, false: 非管理です.
+	 * @return bool 自動更新の可否です.
 	 */
 	public function control_vcs_check( $checkout ) {
 		if ( $this->is_production_domain() ) {
@@ -512,39 +512,82 @@ class FAUC_Auto_update_Controller {
 	}
 
 	/**
-	 * (2) コア自動更新フィルタ
+	 * (2) コア自動更新フィルタ.
 	 *
-	 * @param bool $update コア自動更新許可フラグ
-	 * @param object $item アップデート情報
-	 * @return bool
+	 * @param bool   $update コア自動更新許可フラグです.
+	 * @param object $item   アップデート情報オブジェクトです.
+	 * @return bool メジャーアップデート許可状況に応じた結果です.
 	 */
 	public function control_auto_update_core( $update, $item ) {
-		/**
-		 * ドメインパターンと合致するかどうか.
-		 */
-		// 対象ドメインでない場合は false を返す.
+		// 本番ドメインと一致しない場合はコアを更新しない.
 		if ( ! $this->is_production_domain() ) {
 			return false;
 		}
 
-		// $item->response でアップデート種別を判定
-		// 'autoupdate' = マイナー, 'upgrade' = メジャー
-		if ( isset( $item->response ) && $item->response === 'upgrade' ) {
-			// メジャーアップデート
-			$allow_major = get_option( 'auto_update_core_major', false );
-			return $allow_major ? true : false;
+		// メジャーアップデートかどうかで挙動を分岐する.
+		if ( isset( $item->response ) && 'upgrade' === $item->response ) {
+			// 管理画面トグルがメジャーアップデートを許可しているか判定する.
+			$allow_major = $this->is_major_core_auto_update_enabled();
+			return $allow_major;
 		}
 
-		// マイナーアップデートは常に許可
-		return 'minor';
+		// マイナーアップデートは常に許可する.
+		return true;
 	}
 
 	/**
-	 * (3) プラグイン自動更新フィルタ
+	 * WordPress が記憶しているメジャーアップデート設定を真偽値に変換して取得.
 	 *
-	 * @param bool   $update    自動更新を許可するか (true=許可, false=拒否)
-	 * @param object $item      プラグイン情報 ( $item->plugin = "hello-dolly/hello.php" 等)
-	 * @return bool
+	 * 管理画面のトグルリンクは 'enabled' / 'disabled' などの文字列で保存されるため、
+	 * ここで正しく解釈してフィルターの戻り値に利用する.
+	 *
+	 * @return bool メジャーアップデートを許可する場合は true.
+	 */
+	private function is_major_core_auto_update_enabled() {
+		// WordPress 5.6+ には公式のヘルパーが存在するため優先的に利用する.
+		if ( function_exists( 'wp_is_auto_update_enabled_for_core_type' ) ) {
+			return (bool) wp_is_auto_update_enabled_for_core_type( 'major' );
+		}
+
+		// ネットワークオプションを優先的に確認（マルチサイト対応）.
+		$option = get_site_option( 'auto_update_core_major', null );
+
+		if ( null === $option ) {
+			$option = get_option( 'auto_update_core_major', null );
+		}
+
+		// 文字列の場合は WordPress が利用する値に合わせて判定する.
+		if ( is_string( $option ) ) {
+			$normalized = strtolower( trim( $option ) );
+
+			if ( in_array( $normalized, array( 'enabled', 'enable', 'on', 'true', '1' ), true ) ) {
+				return true;
+			}
+
+			if ( in_array( $normalized, array( 'disabled', 'disable', 'off', 'false', '0' ), true ) ) {
+				return false;
+			}
+		}
+
+		// 真偽値・数値の場合はそのまま評価する.
+		if ( is_bool( $option ) ) {
+			return $option;
+		}
+
+		if ( is_numeric( $option ) ) {
+			return (bool) (int) $option;
+		}
+
+		// 値が存在しない場合は WordPress のデフォルトに合わせて false を返す.
+		return false;
+	}
+
+	/**
+	 * (3) プラグイン自動更新フィルタ.
+	 *
+	 * @param bool   $update 自動更新を許可するか (true=許可, false=拒否) です.
+	 * @param object $item   プラグイン情報 ( $item->plugin = "hello-dolly/hello.php" 等) です.
+	 * @return bool ドメイン判定による自動更新可否です.
 	 */
 	public function control_auto_update_plugin( $update, $item ) {
 		// 「除外リスト」に含まれていれば false を返す.
@@ -559,13 +602,15 @@ class FAUC_Auto_update_Controller {
 	}
 
 	/**
-	 * (4) テーマ自動更新フィルタ
+	 * (4) テーマ自動更新フィルタ.
 	 *
-	 * @param bool   $update (true=許可, false=拒否)
-	 * @param object $item   テーマ情報 ($item->theme = 'twentytwentytwo' 等)
-	 * @return bool
+	 * @param bool   $update (true=許可, false=拒否) です.
+	 * @param object $item   テーマ情報 ($item->theme = 'twentytwentytwo' 等) です.
+	 * @return bool ドメイン判定による自動更新可否です.
 	 */
 	public function control_auto_update_theme( $update, $item ) {
+		unset( $update );
+
 		$excluded_themes = get_option( $this->option_name . '_excluded_themes', array() );
 
 		if ( isset( $item->theme ) && in_array( $item->theme, $excluded_themes, true ) ) {
@@ -576,32 +621,38 @@ class FAUC_Auto_update_Controller {
 	}
 
 	/**
-	 * (5) 翻訳ファイル自動更新フィルタ
+	 * (5) 翻訳ファイル自動更新フィルタ.
 	 *
-	 * @param bool $update 自動更新許可フラグ
-	 * @return bool
+	 * @param bool $update 自動更新許可フラグです.
+	 * @return bool ドメイン判定による自動更新可否です.
 	 */
 	public function control_auto_update_translation( $update ) {
+		unset( $update );
+
 		return $this->is_production_domain();
 	}
 
 	/**
-	 * (6) プラグイン一覧の自動更新UI表示フィルタ
+	 * (6) プラグイン一覧の自動更新UI表示フィルタ.
 	 *
-	 * @param bool $enabled true: 表示, false: 非表示
-	 * @return bool
+	 * @param bool $enabled true: 表示, false: 非表示です.
+	 * @return bool UI 表示可否です.
 	 */
 	public function control_auto_update_ui_for_plugins( $enabled ) {
+		unset( $enabled );
+
 		return $this->is_production_domain();
 	}
 
 	/**
-	 * (7) テーマ一覧の自動更新UI表示フィルタ
+	 * (7) テーマ一覧の自動更新UI表示フィルタ.
 	 *
-	 * @param bool $enabled true: 表示, false: 非表示
-	 * @return bool
+	 * @param bool $enabled true: 表示, false: 非表示です.
+	 * @return bool UI 表示可否です.
 	 */
 	public function control_auto_update_ui_for_themes( $enabled ) {
+		unset( $enabled );
+
 		return $this->is_production_domain();
 	}
 
@@ -685,15 +736,15 @@ class FAUC_Auto_update_Controller {
 	}
 
 	/**
-	 * (9) WordPress本体のアップデート通知（バッジなど）を非表示にする処理
+	 * (9) WordPress本体のアップデート通知（バッジなど）を非表示にする処理.
 	 *
-	 * @param array $update_data WP の更新情報（連想配列）
-	 * @return array $update_data 加工後の更新情報
+	 * @param array $update_data WP の更新情報（連想配列）です.
+	 * @return array 加工後の更新情報です.
 	 */
 	public function hide_wordpress_update_notifications( $update_data ) {
 		// 「Update 通知設定」でチェックが入っているかどうか.
 		if ( $this->should_hide_wp_update_notifications() ) {
-			// WordPress本体の更新数を取得（通常 0 or 1 だが念のため変数へ）
+			// WordPress本体の更新数を取得（通常 0 or 1 だが念のため変数へ）.
 			$wordpress_count = isset( $update_data['counts']['wordpress'] ) ? $update_data['counts']['wordpress'] : 0;
 
 			// 全体の合計から WordPress本体の更新数を引く (0 であれば何もしない).
@@ -716,7 +767,7 @@ class FAUC_Auto_update_Controller {
 	 */
 	public function remove_update_nag_for_core() {
 		if ( $this->should_hide_wp_update_notifications() ) {
-			// update_nag フックを削除する → WPコア向けバナーの削除
+			// update_nag フックを削除する → WPコア向けバナーの削除.
 			remove_action( 'admin_notices', 'update_nag', 3 );
 		}
 	}
@@ -734,4 +785,4 @@ class FAUC_Auto_update_Controller {
 }
 
 // インスタンスを生成.
-new FAUC_Auto_update_Controller();
+new FAUC_Auto_Update_Controller();
