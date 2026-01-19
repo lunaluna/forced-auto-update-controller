@@ -74,7 +74,7 @@ class FAUC_Auto_Update_Controller {
 		add_filter( 'wp_get_update_data', array( $this, 'hide_wordpress_update_notifications' ), 9999 );
 
 		/**
-		 *  (9-1) コアアップデートがある際に管理画面上部に表示されるバナー “WordPress x.x.x が利用可能です” を削除
+		 *  (9-1) コアアップデートがある際に管理画面上部に表示されるバナー "WordPress x.x.x が利用可能です" を削除
 		 */
 		add_action( 'admin_head', array( $this, 'remove_update_nag_for_core' ), 9999 );
 	}
@@ -524,15 +524,56 @@ class FAUC_Auto_Update_Controller {
 			return false;
 		}
 
-		// メジャーアップデートかどうかで挙動を分岐する.
-		if ( isset( $item->response ) && 'upgrade' === $item->response ) {
-			// 管理画面トグルがメジャーアップデートを許可しているか判定する.
-			$allow_major = $this->is_major_core_auto_update_enabled();
-			return $allow_major;
+		// メジャーアップデートかどうかをバージョン比較で判定する.
+		if ( $this->is_core_major_update( $item ) ) {
+			/**
+			 * メジャーアップデートの場合は auto_update_core_major オプションを確認する.
+			 * WordPress の allow_major_auto_core_updates フィルタは自動更新実行時にのみ
+			 * 設定されるため、オプション値を直接チェックする必要がある.
+			 */
+			return $this->is_major_core_auto_update_enabled();
 		}
 
 		// マイナーアップデートは常に許可する.
 		return true;
+	}
+
+	/**
+	 * コアアップデートがメジャーアップデートかどうかを判定する.
+	 *
+	 * 現在の WordPress バージョンと更新対象バージョンを比較し、
+	 * X.Y の部分が変わる場合はメジャーアップデートと判定する.
+	 *
+	 * @param object $item アップデート情報オブジェクトです.
+	 * @return bool メジャーアップデートの場合は true、マイナーアップデートの場合は false.
+	 */
+	private function is_core_major_update( $item ) {
+		global $wp_version;
+
+		// 更新対象バージョンを取得.
+		$new_version = isset( $item->version ) ? $item->version : '';
+
+		// バージョン情報が取得できない場合は安全のためメジャーとして扱う.
+		if ( empty( $new_version ) || empty( $wp_version ) ) {
+			return true;
+		}
+
+		// 現在のバージョンと新しいバージョンのメジャー・マイナー部分 (X.Y) を比較.
+		$current_parts = explode( '.', $wp_version );
+		$new_parts     = explode( '.', $new_version );
+
+		// X.Y 部分を取得（最低2要素必要）.
+		if ( count( $current_parts ) < 2 || count( $new_parts ) < 2 ) {
+			// バージョン形式が不正な場合は安全のためメジャーとして扱う.
+			return true;
+		}
+
+		// X.Y の部分を比較（メジャーバージョン + マイナーバージョン）.
+		$current_major_minor = $current_parts[0] . '.' . $current_parts[1];
+		$new_major_minor     = $new_parts[0] . '.' . $new_parts[1];
+
+		// X.Y が異なればメジャーアップデート、同じならマイナーアップデート.
+		return $current_major_minor !== $new_major_minor;
 	}
 
 	/**
@@ -544,11 +585,6 @@ class FAUC_Auto_Update_Controller {
 	 * @return bool メジャーアップデートを許可する場合は true.
 	 */
 	private function is_major_core_auto_update_enabled() {
-		// WordPress 5.6+ には公式のヘルパーが存在するため優先的に利用する.
-		if ( function_exists( 'wp_is_auto_update_enabled_for_core_type' ) ) {
-			return (bool) wp_is_auto_update_enabled_for_core_type( 'major' );
-		}
-
 		// ネットワークオプションを優先的に確認（マルチサイト対応）.
 		$option = get_site_option( 'auto_update_core_major', null );
 
@@ -760,7 +796,7 @@ class FAUC_Auto_Update_Controller {
 	}
 
 	/**
-	 * (9-1) コアアップデートがある際に管理画面上部に表示されるバナー “WordPress x.x.x が利用可能です” を削除
+	 * (9-1) コアアップデートがある際に管理画面上部に表示されるバナー "WordPress x.x.x が利用可能です" を削除
 	 * （update_nag は WordPress本体更新用の通知に限るので、プラグイン更新には影響しない）
 	 *
 	 * @return void
