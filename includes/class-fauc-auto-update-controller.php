@@ -43,7 +43,7 @@ class FAUC_Auto_Update_Controller {
 		add_action( 'admin_init', array( $this, 'settings_init' ) );
 
 		// (1) バージョンコントロールのチェックを無効化.
-		add_filter( 'automatic_updates_is_vcs_checkout', array( $this, 'control_vcs_check' ), 10, 1 );
+		add_filter( 'automatic_updates_is_vcs_checkout', array( $this, 'control_vcs_check' ), 9999, 1 );
 
 		// (2) コア自動更新: 優先度 9999 で最終上書き（引数 2 つに変更）.
 		add_filter( 'auto_update_core', array( $this, 'control_auto_update_core' ), 9999, 2 );
@@ -77,6 +77,16 @@ class FAUC_Auto_Update_Controller {
 		 *  (9-1) コアアップデートがある際に管理画面上部に表示されるバナー "WordPress x.x.x が利用可能です" を削除
 		 */
 		add_action( 'admin_head', array( $this, 'remove_update_nag_for_core' ), 9999 );
+
+		/**
+		 * (10) メジャーアップデートのトグル表示を制御.
+		 */
+		add_filter( 'allow_major_auto_core_updates', array( $this, 'allow_major_auto_core_updates' ), 9999, 1 );
+
+		/**
+		 * (11) マイナーアップデートのトグル表示を制御.
+		 */
+		add_filter( 'allow_minor_auto_core_updates', array( $this, 'allow_minor_auto_core_updates' ), 9999, 1 );
 	}
 
 	/**
@@ -514,11 +524,35 @@ class FAUC_Auto_Update_Controller {
 	/**
 	 * (2) コア自動更新フィルタ.
 	 *
-	 * @param bool   $update コア自動更新許可フラグです.
-	 * @param object $item   アップデート情報オブジェクトです.
-	 * @return bool メジャーアップデート許可状況に応じた結果です.
+	 * @param bool|null $update コア自動更新許可フラグです.
+	 * @param object    $item   アップデート情報オブジェクトです.
+	 * @return bool|null メジャーアップデート許可状況に応じた結果です.
 	 */
 	public function control_auto_update_core( $update, $item ) {
+		/**
+		 * wp_is_auto_update_forced_for_type() からの呼び出しかどうかを判定する.
+		 *
+		 * WordPress は更新画面でトグルリンクを表示するかどうかを決定するために
+		 * wp_is_auto_update_forced_for_type() を呼び出す。この関数は auto_update_core
+		 * フィルターにダミーの $item（type プロパティのみ）を渡す。
+		 *
+		 * フィルターが bool 値を返すと「強制」と判断され、トグルリンクが表示されない。
+		 * null を返すとWordPressのデフォルト動作に従い、トグルリンクが表示される。
+		 *
+		 * したがって、UI表示のチェック時（version プロパティがない場合）は null を返し、
+		 * 実際の自動更新実行時（version プロパティがある場合）のみ bool 値を返す。
+		 */
+		if ( ! isset( $item->version ) ) {
+			// UI表示のためのチェック - null を返してトグルリンクを表示させる.
+			// ただし、本番ドメインでない場合は false を返して自動更新を無効にする.
+			if ( ! $this->is_production_domain() ) {
+				return false;
+			}
+			return null;
+		}
+
+		// 以下は実際の自動更新実行時の処理.
+
 		// 本番ドメインと一致しない場合はコアを更新しない.
 		if ( ! $this->is_production_domain() ) {
 			return false;
@@ -817,6 +851,34 @@ class FAUC_Auto_Update_Controller {
 		// オプションが true (1) なら隠す設定.
 		$hide_wp_updates = get_option( $this->option_name . '_hide_wp_updates', false );
 		return (bool) $hide_wp_updates;
+	}
+
+	/**
+	 * (10) メジャーアップデートのトグル表示を許可するかどうか制御.
+	 *
+	 * @param bool $value デフォルトの値です.
+	 * @return bool メジャーアップデート許可状況です.
+	 */
+	public function allow_major_auto_core_updates( $value ) {
+		if ( $this->is_production_domain() ) {
+			// ドメインパターンと合致したらWordPress標準の設定値を返す.
+			return $this->is_major_core_auto_update_enabled();
+		}
+		return $value;
+	}
+
+	/**
+	 * (11) マイナーアップデートのトグル表示を許可するかどうか制御.
+	 *
+	 * @param bool $value デフォルトの値です.
+	 * @return bool マイナーアップデート許可状況です.
+	 */
+	public function allow_minor_auto_core_updates( $value ) {
+		if ( $this->is_production_domain() ) {
+			// ドメインパターンと合致したら常に許可.
+			return true;
+		}
+		return $value;
 	}
 }
 

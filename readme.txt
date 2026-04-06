@@ -15,6 +15,9 @@ Forced Auto update Controller is a plugin that allows you to enable automatic up
 
 == Changelog ==
 
+= 1.5.1 =
+* Fixed the toggle to enable whether or not to major update the core on the WordPress update page using `allow_major_auto_core_updates` filter.
+
 = 1.5.0 =
 * Fixed the toggle to enable whether or not to major update the core on the WordPress update page using `allow_major_auto_core_updates` filter.
 
