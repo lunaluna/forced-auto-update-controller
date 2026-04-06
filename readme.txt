@@ -1,8 +1,8 @@
 === Forced Auto Update Controller ===
 Tags: update
 Requires at least: 6.0
-Tested up to: 6.9
-Stable tag: 1.5.0
+Tested up to: 6.9.4
+Stable tag: 1.6.0
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -14,6 +14,10 @@ Forced Auto update Controller is a plugin that allows you to enable automatic up
 2. Activate the plugin through the \'Plugins\' menu in WordPress.
 
 == Changelog ==
+
+= 1.6.0 =
+* Removed `allow_major_auto_core_updates` filter to fix the major/minor auto-update toggle link not appearing on the WordPress updates page.
+* Added `pre_site_option_auto_update_core_minor` and `pre_option_auto_update_core_minor` filters to force `auto_update_core_minor` option to `enabled` when the domain pattern matches.
 
 = 1.5.1 =
 * Fixed the toggle to enable whether or not to major update the core on the WordPress update page using `allow_major_auto_core_updates` filter.

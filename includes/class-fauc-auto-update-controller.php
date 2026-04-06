@@ -79,14 +79,21 @@ class FAUC_Auto_Update_Controller {
 		add_action( 'admin_head', array( $this, 'remove_update_nag_for_core' ), 9999 );
 
 		/**
-		 * (10) メジャーアップデートのトグル表示を制御.
-		 */
-		add_filter( 'allow_major_auto_core_updates', array( $this, 'allow_major_auto_core_updates' ), 9999, 1 );
-
-		/**
-		 * (11) マイナーアップデートのトグル表示を制御.
+		 * (10) マイナーアップデートのトグル表示を制御.
+		 *
+		 * WordPress は has_filter('allow_minor_auto_core_updates') をチェックしないため、
+		 * このフィルタを登録してもトグルUIは非表示にならない.
 		 */
 		add_filter( 'allow_minor_auto_core_updates', array( $this, 'allow_minor_auto_core_updates' ), 9999, 1 );
+
+		/**
+		 * (11) auto_update_core_minor オプション値をドメイン合致時に 'enabled' に強制する.
+		 *
+		 * WordPress の更新ページは get_site_option('auto_update_core_minor') でオプション値を
+		 * 直接読み取るため、pre_site_option / pre_option フィルタでインターセプトする.
+		 */
+		add_filter( 'pre_site_option_auto_update_core_minor', array( $this, 'force_core_minor_option' ), 9999 );
+		add_filter( 'pre_option_auto_update_core_minor', array( $this, 'force_core_minor_option' ), 9999 );
 	}
 
 	/**
@@ -530,7 +537,7 @@ class FAUC_Auto_Update_Controller {
 	 */
 	public function control_auto_update_core( $update, $item ) {
 		/**
-		 * wp_is_auto_update_forced_for_type() からの呼び出しかどうかを判定する.
+		 * 'wp_is_auto_update_forced_for_type()' からの呼び出しかどうかを判定する.
 		 *
 		 * WordPress は更新画面でトグルリンクを表示するかどうかを決定するために
 		 * wp_is_auto_update_forced_for_type() を呼び出す。この関数は auto_update_core
@@ -854,29 +861,31 @@ class FAUC_Auto_Update_Controller {
 	}
 
 	/**
-	 * (10) メジャーアップデートのトグル表示を許可するかどうか制御.
-	 *
-	 * @param bool $value デフォルトの値です.
-	 * @return bool メジャーアップデート許可状況です.
-	 */
-	public function allow_major_auto_core_updates( $value ) {
-		if ( $this->is_production_domain() ) {
-			// ドメインパターンと合致したらWordPress標準の設定値を返す.
-			return $this->is_major_core_auto_update_enabled();
-		}
-		return $value;
-	}
-
-	/**
-	 * (11) マイナーアップデートのトグル表示を許可するかどうか制御.
+	 * (10) マイナーアップデートのトグル表示を許可するかどうか制御.
 	 *
 	 * @param bool $value デフォルトの値です.
 	 * @return bool マイナーアップデート許可状況です.
 	 */
 	public function allow_minor_auto_core_updates( $value ) {
 		if ( $this->is_production_domain() ) {
-			// ドメインパターンと合致したら常に許可.
 			return true;
+		}
+		return $value;
+	}
+
+	/**
+	 * (11) auto_update_core_minor オプションをドメイン合致時に 'enabled' に強制する.
+	 *
+	 * Pre_site_option / pre_option フィルタのコールバック.
+	 * 非 false の値を返すと get_site_option() / get_option() が DB 検索をスキップし、
+	 * この戻り値をそのまま使用する.
+	 *
+	 * @param mixed $value pre_option / pre_site_option から渡される値（デフォルトは false）.
+	 * @return mixed ドメイン合致時は 'enabled'、それ以外は元の $value.
+	 */
+	public function force_core_minor_option( $value ) {
+		if ( $this->is_production_domain() ) {
+			return 'enabled';
 		}
 		return $value;
 	}
