@@ -306,6 +306,54 @@ class FAUC_Auto_Update_Controller {
 			esc_attr( $value ),
 			esc_attr__( '例: example.com、example.com/sample など', 'forced-auto-update-controller' )
 		);
+
+		// 診断情報を表示.
+		$url_parts = wp_parse_url( home_url() );
+		$detected  = '';
+		if ( ! empty( $url_parts['host'] ) ) {
+			$detected = $url_parts['host'];
+			if ( ! empty( $url_parts['port'] ) ) {
+				$detected .= ':' . $url_parts['port'];
+			}
+			$path = isset( $url_parts['path'] ) ? trim( $url_parts['path'], '/' ) : '';
+			if ( '' !== $path ) {
+				$detected .= '/' . $path;
+			}
+		}
+
+		echo '<div style="margin-top:8px;padding:8px 12px;background:#f0f0f1;border-left:4px solid #2271b1;">';
+		printf(
+			'<p style="margin:0 0 4px;"><strong>%s</strong> <code>%s</code></p>',
+			esc_html__( '検出されたサイトドメイン:', 'forced-auto-update-controller' ),
+			esc_html( $detected )
+		);
+
+		if ( ! empty( $value ) && '' !== $detected ) {
+			if ( strtolower( $detected ) === strtolower( $value ) ) {
+				printf(
+					'<p style="margin:0;color:#00a32a;">&#10003; %s</p>',
+					esc_html__( '保存済みパターンと一致しています。プラグインの自動更新制御は有効です。', 'forced-auto-update-controller' )
+				);
+			} else {
+				printf(
+					'<p style="margin:0;color:#d63638;">&#10007; %s</p>',
+					esc_html__( '保存済みパターンと一致しません。自動更新制御は無効の状態です。', 'forced-auto-update-controller' )
+				);
+				printf(
+					'<p style="margin:4px 0 0;color:#50575e;font-size:12px;">%s <code>%s</code> / %s <code>%s</code></p>',
+					esc_html__( '保存値:', 'forced-auto-update-controller' ),
+					esc_html( $value ),
+					esc_html__( '検出値:', 'forced-auto-update-controller' ),
+					esc_html( strtolower( $detected ) )
+				);
+			}
+		} elseif ( empty( $value ) ) {
+			printf(
+				'<p style="margin:0;color:#dba617;">&#9888; %s</p>',
+				esc_html__( 'ドメインパターンが未設定です。上記の検出値を参考に入力してください。', 'forced-auto-update-controller' )
+			);
+		}
+		echo '</div>';
 	}
 
 	/**
@@ -418,8 +466,8 @@ class FAUC_Auto_Update_Controller {
 			return '';
 		}
 
-		// ドメイン名とパスの形式を検証 (例: example.com や example.com/sample).
-		if ( ! preg_match( '/^[a-z0-9.-]+\.[a-z]{2,}(\/[a-z0-9_-]+)?$/i', $pattern ) ) {
+		// ドメイン（ポート番号可）＋任意の深さのパスを検証.
+		if ( ! preg_match( '/^[a-z0-9.-]+\.[a-z]{2,}(:[0-9]+)?(\/[a-z0-9_.~-]+)*$/i', $pattern ) ) {
 			add_settings_error(
 				'fauc-forced-auto-update-controller-notices',
 				'FAUC_invalid_domain_pattern_format',
@@ -429,8 +477,7 @@ class FAUC_Auto_Update_Controller {
 			return '';
 		}
 
-		// パターンが有効な場合は返す.
-		return $pattern;
+		return strtolower( $pattern );
 	}
 
 	/**
@@ -457,56 +504,50 @@ class FAUC_Auto_Update_Controller {
 	 * @return bool true: 一致（本番） / false: 不一致（非本番）です.
 	 */
 	private function is_production_domain() {
-		// 管理画面で設定されたパターンを取得.
 		$pattern = get_option( $this->option_name );
 
-		// パターンが取得できなかったら false を返す（自動更新にしない）.
 		if ( empty( $pattern ) ) {
 			return false;
 		}
 
-		// 先頭の 'https://' または 'http://' を削除.
 		$pattern = preg_replace( '#^https?://#i', '', $pattern );
-
-		// 末尾の '/' を削除.
 		$pattern = rtrim( $pattern, '/' );
 
-		// 再度パターンが空かどうかを確認.
 		if ( empty( $pattern ) ) {
 			return false;
 		}
 
-		// ドメインパターンが有効な形式でない場合も判定を行わない.
-		if ( ! preg_match( '/^[a-z0-9.-]+\.[a-z]{2,}(\/[a-z0-9_-]+)?$/i', $pattern ) ) {
+		// ドメイン（ポート番号可）＋任意の深さのパスを許容.
+		if ( ! preg_match( '/^[a-z0-9.-]+\.[a-z]{2,}(:[0-9]+)?(\/[a-z0-9_.~-]+)*$/i', $pattern ) ) {
 			return false;
 		}
 
-		// home_url() をパースして、ドメイン名とパスを取得.
 		$url_parts = wp_parse_url( home_url() );
 
-		// URL がパースできなければ判定不能として false を返す（自動更新にしない）.
 		if ( empty( $url_parts ) ) {
 			return false;
 		}
 
-		// ドメイン部分とパス部分を取得.
 		$host = isset( $url_parts['host'] ) ? $url_parts['host'] : '';
-		$path = isset( $url_parts['path'] ) ? trim( $url_parts['path'], '/' ) : '';
 
-		// ドメイン部分を取得できなければ判定不能として false を返す（自動更新にしない）.
 		if ( empty( $host ) ) {
 			return false;
 		}
 
-		// host + path で比較用文字列を作成.
-		// パスが空でなければ、ドメインのあとに '/' を挟んでからパスを付与.
+		// ポート番号があれば付与.
+		if ( ! empty( $url_parts['port'] ) ) {
+			$host .= ':' . $url_parts['port'];
+		}
+
+		$path = isset( $url_parts['path'] ) ? trim( $url_parts['path'], '/' ) : '';
+
 		$host_with_path = $host;
 		if ( '' !== $path ) {
 			$host_with_path .= '/' . $path;
 		}
 
-		// パターンと完全一致する場合のみ true.
-		if ( $host_with_path === $pattern ) {
+		// 小文字に正規化して比較.
+		if ( strtolower( $host_with_path ) === strtolower( $pattern ) ) {
 			return true;
 		}
 
@@ -531,51 +572,24 @@ class FAUC_Auto_Update_Controller {
 	/**
 	 * (2) コア自動更新フィルタ.
 	 *
+	 * Auto_update_core フィルタは WP_Automatic_Updater::should_update() (バックグラウンド
+	 * 実行時) でのみ呼ばれる。core_auto_updates_settings() (更新画面の UI) はこのフィルタを
+	 * 使用しない。UI 側の制御は automatic_updates_is_vcs_checkout / allow_minor_auto_core_updates
+	 * / pre_site_option_auto_update_core_minor 等の別フックで行う。
+	 *
 	 * @param bool|null $update コア自動更新許可フラグです.
 	 * @param object    $item   アップデート情報オブジェクトです.
-	 * @return bool|null メジャーアップデート許可状況に応じた結果です.
+	 * @return bool メジャーアップデート許可状況に応じた結果です.
 	 */
 	public function control_auto_update_core( $update, $item ) {
-		/**
-		 * 'wp_is_auto_update_forced_for_type()' からの呼び出しかどうかを判定する.
-		 *
-		 * WordPress は更新画面でトグルリンクを表示するかどうかを決定するために
-		 * wp_is_auto_update_forced_for_type() を呼び出す。この関数は auto_update_core
-		 * フィルターにダミーの $item（type プロパティのみ）を渡す。
-		 *
-		 * フィルターが bool 値を返すと「強制」と判断され、トグルリンクが表示されない。
-		 * null を返すとWordPressのデフォルト動作に従い、トグルリンクが表示される。
-		 *
-		 * したがって、UI表示のチェック時（version プロパティがない場合）は null を返し、
-		 * 実際の自動更新実行時（version プロパティがある場合）のみ bool 値を返す。
-		 */
-		if ( ! isset( $item->version ) ) {
-			// UI表示のためのチェック - null を返してトグルリンクを表示させる.
-			// ただし、本番ドメインでない場合は false を返して自動更新を無効にする.
-			if ( ! $this->is_production_domain() ) {
-				return false;
-			}
-			return null;
-		}
-
-		// 以下は実際の自動更新実行時の処理.
-
-		// 本番ドメインと一致しない場合はコアを更新しない.
 		if ( ! $this->is_production_domain() ) {
 			return false;
 		}
 
-		// メジャーアップデートかどうかをバージョン比較で判定する.
 		if ( $this->is_core_major_update( $item ) ) {
-			/**
-			 * メジャーアップデートの場合は auto_update_core_major オプションを確認する.
-			 * WordPress の allow_major_auto_core_updates フィルタは自動更新実行時にのみ
-			 * 設定されるため、オプション値を直接チェックする必要がある.
-			 */
 			return $this->is_major_core_auto_update_enabled();
 		}
 
-		// マイナーアップデートは常に許可する.
 		return true;
 	}
 
