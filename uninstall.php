@@ -21,3 +21,5 @@ delete_option( 'FAUC_forced_auto_update_domain' );
 delete_option( 'FAUC_forced_auto_update_domain_excluded_plugins' );
 // テーマ除外リスト.
 delete_option( 'FAUC_forced_auto_update_domain_excluded_themes' );
+// WordPress本体の更新通知を非表示にする設定.
+delete_option( 'FAUC_forced_auto_update_domain_hide_wp_updates' );
