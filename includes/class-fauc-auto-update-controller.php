@@ -236,7 +236,7 @@ class FAUC_Auto_Update_Controller {
 			$this->option_name . '_excluded_plugins',
 			array(
 				'type'              => 'array',
-				'sanitize_callback' => array( $this, 'sanitize_checklist' ),
+				'sanitize_callback' => array( $this, 'sanitize_plugin_checklist' ),
 				'default'           => array(),
 			)
 		);
@@ -247,7 +247,7 @@ class FAUC_Auto_Update_Controller {
 			$this->option_name . '_excluded_themes',
 			array(
 				'type'              => 'array',
-				'sanitize_callback' => array( $this, 'sanitize_checklist' ),
+				'sanitize_callback' => array( $this, 'sanitize_theme_checklist' ),
 				'default'           => array(),
 			)
 		);
@@ -481,21 +481,53 @@ class FAUC_Auto_Update_Controller {
 	}
 
 	/**
-	 * チェックリストのサニタイズコールバック.
+	 * プラグイン除外チェックリストのサニタイズコールバック.
+	 * インストール済みプラグインのファイルパスとの厳密照合でホワイトリスト化する.
 	 *
 	 * @param array $input ユーザー送信値です.
 	 * @return array サニタイズ後の値です.
 	 */
-	public function sanitize_checklist( $input ) {
+	public function sanitize_plugin_checklist( $input ) {
 		if ( ! is_array( $input ) ) {
 			return array();
 		}
 
+		if ( ! function_exists( 'get_plugins' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/plugin.php';
+		}
+
+		$installed_plugins = array_keys( get_plugins() );
+
 		$output = array();
 		foreach ( $input as $val ) {
-			$output[] = sanitize_text_field( $val );
+			if ( is_string( $val ) && in_array( $val, $installed_plugins, true ) ) {
+				$output[] = $val;
+			}
 		}
-		return $output;
+		return array_values( array_unique( $output ) );
+	}
+
+	/**
+	 * テーマ除外チェックリストのサニタイズコールバック.
+	 * インストール済みテーマのスラッグとの厳密照合でホワイトリスト化する.
+	 *
+	 * @param array $input ユーザー送信値です.
+	 * @return array サニタイズ後の値です.
+	 */
+	public function sanitize_theme_checklist( $input ) {
+		if ( ! is_array( $input ) ) {
+			return array();
+		}
+
+		$installed_themes = array_keys( wp_get_themes() );
+
+		$output = array();
+		foreach ( $input as $val ) {
+			if ( is_string( $val ) && in_array( $val, $installed_themes, true ) ) {
+				$output[] = $val;
+			}
+		}
+		return array_values( array_unique( $output ) );
 	}
 
 	/**
