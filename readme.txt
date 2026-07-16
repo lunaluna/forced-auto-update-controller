@@ -1,7 +1,7 @@
 === Forced Auto Update Controller ===
 Tags: update
 Requires at least: 6.0
-Tested up to: 6.9.4
+Tested up to: 7.0.1
 Stable tag: 1.6.2
 Requires PHP: 7.4
 License: GPLv2 or later

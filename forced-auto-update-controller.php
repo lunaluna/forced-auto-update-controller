@@ -1,12 +1,17 @@
 <?php
 /**
- * Plugin Name: Forced Auto Update Controller
- * Description: Git などファイルのバージョン管理下でも、指定したドメインパターンに合致した場合だけは自動更新を有効化するプラグイン.
- * Version:     1.6.2
- * Author:      Hiroki Saiki
- * Author URI:  https://profiles.wordpress.org/lunaluna_dev/
- * License:     GPLv2 or later
- * Text Domain: forced-auto-update-controller
+ * Plugin Name:       Forced Auto Update Controller
+ * Plugin URI:        https://github.com/lunaluna/forced-auto-update-controller
+ * Description:       Git などファイルのバージョン管理下でも、指定したドメインパターンに合致した場合だけは自動更新を有効化するプラグイン.
+ * Version:           1.6.2
+ * Requires at least: 6.0
+ * Tested up to:      7.0.1
+ * Requires PHP:      7.4
+ * Author:            lunaluna_dev
+ * Author URI:        https://profiles.wordpress.org/lunaluna_dev/
+ * License:           GPLv2 or later
+ * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
+ * Text Domain:       forced-auto-update-controller
  *
  * @package ForcedAutoUpdateController
  */
