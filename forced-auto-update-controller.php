@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Forced Auto Update Controller
  * Description: Git などファイルのバージョン管理下でも、指定したドメインパターンに合致した場合だけは自動更新を有効化するプラグイン.
- * Version:     1.6.1
+ * Version:     1.6.2
  * Author:      Hiroki Saiki
  * Author URI:  https://profiles.wordpress.org/lunaluna_dev/
  * License:     GPLv2 or later

@@ -2,7 +2,7 @@
 Tags: update
 Requires at least: 6.0
 Tested up to: 6.9.4
-Stable tag: 1.6.1
+Stable tag: 1.6.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -14,6 +14,11 @@ Forced Auto update Controller is a plugin that allows you to enable automatic up
 2. Activate the plugin through the \'Plugins\' menu in WordPress.
 
 == Changelog ==
+
+= 1.6.2 =
+* Fixed: environment check on activation now aborts via `wp_die()` (previous self-deactivation was a no-op and its warning notice was never shown).
+* Fixed: `..._hide_wp_updates` option is now deleted on uninstall.
+* Hardened: excluded plugin/theme lists are now validated against installed plugins/themes.
 
 = 1.6.1 =
 * Simplified `control_auto_update_core()` by removing the `null`-return logic that was incorrectly based on a non-existent `wp_is_auto_update_forced_for_type()` call. The `auto_update_core` filter is only used by `WP_Automatic_Updater::should_update()` (background execution) and has no effect on the UI.
