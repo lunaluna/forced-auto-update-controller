@@ -78,3 +78,10 @@ jobs:
         uses: wordpress/plugin-check-action@v1
         with:
           build-dir: '.'
+          # 開発用ファイル（配布物には含まれない）は検査対象から除外する.
+          exclude-directories: '.github,vendor'
+          exclude-files: '.editorconfig,.gitignore,composer.json,composer.lock,phpcs.xml.dist,phpstan.neon.dist'
+          # Update URI: false はこのプラグインが wp.org 未登録であることを前提に
+          # サブスクワッティング型サプライチェーン攻撃（CVE-2021-44223 系）を防ぐ
+          # 意図的な対策（H-1）であり、既知の false positive として無視する.
+          ignore-codes: 'plugin_updater_detected'

@@ -2,13 +2,13 @@
 Contributors: lunaluna_dev
 Tags: update, auto-update, automatic updates, git, version control
 Requires at least: 6.0
-Tested up to: 7.0.2
+Tested up to: 7.0
 Stable tag: 1.7.0
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Forced Auto update Controller is a plugin that allows you to enable automatic updates only when they match the specified domain pattern, even under version control systems such as Git and SVN.
+Enable automatic updates only on domains matching a pattern you specify, even under version control systems such as Git and SVN.
 
 == Description ==
 
@@ -54,7 +54,7 @@ risk in a Multisite environment.
 * Changed: on a matching domain, per-plugin/per-theme automatic-update toggles are now respected instead of being unconditionally forced on; the exclusion checklists now act purely as a forced-off list.
 * Added: an `automatic_updates_complete` handler that records successful automatic updates and notifies administrators, reducing the risk of a later deploy reverting an already-applied security patch.
 * Hardened: `sanitize_domain_pattern()` now casts input to a string, accepts punycode TLDs, and supports multiple domain patterns (one per line); `is_production_domain()` results are now memoized per request.
-* Documented: WordPress Multisite is not officially supported (`Network: false`); added a runtime warning under Multisite, and fixed `update_nag` not being removed on Network Admin screens.
+* Documented: WordPress Multisite is not officially supported; added a runtime warning under Multisite, and fixed `update_nag` not being removed on Network Admin screens.
 * Fixed: translator strings no longer contain raw HTML/inline styles, closing a translation-file injection risk.
 * Fixed: added a `Domain Path` header and an explicit `load_plugin_textdomain()` call so translations actually load (this plugin is not hosted on wp.org).
 * Added PHPCS (WordPress-Extra/Docs), PHPStan (level 5), and a GitHub Actions CI workflow (PHP 7.4/8.1/8.3/8.4 syntax matrix, PHPCS, PHPStan, Plugin Check).

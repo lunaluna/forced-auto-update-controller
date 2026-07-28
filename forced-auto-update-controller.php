@@ -5,12 +5,11 @@
  * Description:       Git などファイルのバージョン管理下でも、指定したドメインパターンに合致した場合だけは自動更新を有効化するプラグイン.
  * Version:           1.7.0
  * Requires at least: 6.0
- * Tested up to:      7.0.2
+ * Tested up to:      7.0
  * Requires PHP:      7.4
  * Author:            lunaluna_dev
  * Author URI:        https://profiles.wordpress.org/lunaluna_dev/
  * Update URI:        false
- * Network:           false
  * License:           GPLv2 or later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain:       forced-auto-update-controller
