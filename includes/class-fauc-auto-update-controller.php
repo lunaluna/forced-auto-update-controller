@@ -38,6 +38,11 @@ class FAUC_Auto_Update_Controller {
 	 */
 	public function __construct() {
 
+		// 緊急停止スイッチ: 定義されていれば、以降のフック登録を一切行わない.
+		if ( defined( 'FAUC_DISABLE' ) && FAUC_DISABLE ) {
+			return;
+		}
+
 		// 設定ページの追加.
 		add_action( 'admin_menu', array( $this, 'add_settings_page' ) );
 
