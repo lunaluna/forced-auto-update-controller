@@ -1,8 +1,8 @@
 === Forced Auto Update Controller ===
 Tags: update
 Requires at least: 6.0
-Tested up to: 7.0.1
-Stable tag: 1.6.2
+Tested up to: 7.0.2
+Stable tag: 1.6.3
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -14,6 +14,9 @@ Forced Auto update Controller is a plugin that allows you to enable automatic up
 2. Activate the plugin through the \'Plugins\' menu in WordPress.
 
 == Changelog ==
+
+= 1.6.3 =
+* Security: added the `Update URI: false` plugin header to prevent supply-chain hijack via unregistered wp.org slug collision (see CVE-2021-44223 class of issue).
 
 = 1.6.2 =
 * Fixed: environment check on activation now aborts via `wp_die()` (previous self-deactivation was a no-op and its warning notice was never shown).
