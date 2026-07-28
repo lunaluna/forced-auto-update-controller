@@ -1,0 +1,16 @@
+parameters:
+	level: 5
+	paths:
+		- forced-auto-update-controller.php
+		- includes
+		- uninstall.php
+	excludePaths:
+		- vendor/*
+		- languages/*
+	ignoreErrors:
+		# FAUC_PRODUCTION_DOMAIN はサイト側の wp-config.php 等で任意に定義される
+		# オプション定数のため、静的解析からは検出できない.
+		- '#^Constant FAUC_PRODUCTION_DOMAIN not found\.$#'
+
+includes:
+	- vendor/szepeviktor/phpstan-wordpress/extension.neon
