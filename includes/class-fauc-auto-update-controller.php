@@ -829,6 +829,9 @@ class FAUC_Auto_Update_Controller {
 			)
 		);
 
+		// 通知抑止設定の有無にかかわらず、現状を常時可視化する.
+		$this->render_core_update_status();
+
 		// ラップ用の div を閉じる.
 		echo '</div>';
 	}
@@ -853,6 +856,9 @@ class FAUC_Auto_Update_Controller {
 				'forced-auto-update-controller'
 			)
 		);
+
+		// 通知抑止設定の有無にかかわらず、現状を常時可視化する.
+		$this->render_core_update_status();
 
 		// ラップ用の div を閉じる.
 		echo '</div>';
@@ -896,14 +902,72 @@ class FAUC_Auto_Update_Controller {
 	}
 
 	/**
+	 * ダッシュボードウィジェットに、現在のコアバージョン・保留中の更新の有無・
+	 * このプラグインによるコア自動更新の有効状況を常時表示する.
+	 *
+	 * 「WordPress本体の更新通知を非表示にする」設定の ON/OFF に関わらず表示することで、
+	 * 通知を消したことで更新の必要性そのものに気づけなくなる事態を防ぐ.
+	 *
+	 * @return void
+	 */
+	private function render_core_update_status() {
+		global $wp_version;
+
+		if ( ! function_exists( 'get_core_updates' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/update.php';
+		}
+
+		$core_updates    = get_core_updates( array( 'dismissed' => false ) );
+		$pending_version = '';
+		if ( ! empty( $core_updates ) && isset( $core_updates[0]->response, $core_updates[0]->version ) && 'upgrade' === $core_updates[0]->response ) {
+			$pending_version = $core_updates[0]->version;
+		}
+
+		$core_auto_update_enabled = $this->is_production_domain();
+
+		echo '<div class="forced-auto-update-core-status" style="margin-top:12px;padding:8px 12px;background:#f0f0f1;border-left:4px solid #2271b1;">';
+
+		printf(
+			'<p style="margin:0 0 4px;"><strong>%s</strong> %s</p>',
+			esc_html__( '現在のコアバージョン:', 'forced-auto-update-controller' ),
+			esc_html( $wp_version )
+		);
+
+		if ( '' !== $pending_version ) {
+			printf(
+				'<p style="margin:0 0 4px;color:#d63638;">%s <strong>%s</strong></p>',
+				esc_html__( '保留中の更新があります:', 'forced-auto-update-controller' ),
+				esc_html( $pending_version )
+			);
+		} else {
+			echo '<p style="margin:0 0 4px;color:#00a32a;">' . esc_html__( '保留中の更新はありません。', 'forced-auto-update-controller' ) . '</p>';
+		}
+
+		printf(
+			'<p style="margin:0;">%s <strong>%s</strong></p>',
+			esc_html__( 'このプラグインによるコア自動更新:', 'forced-auto-update-controller' ),
+			$core_auto_update_enabled
+				? esc_html__( '有効です。', 'forced-auto-update-controller' )
+				: esc_html__( '無効です（ドメインパターン未一致）。', 'forced-auto-update-controller' )
+		);
+
+		echo '</div>';
+	}
+
+	/**
 	 * WP本体の更新通知を非表示にする設定かどうか
 	 *
 	 * @return bool
 	 */
 	private function should_hide_wp_update_notifications() {
 		// オプションが true (1) なら隠す設定.
-		$hide_wp_updates = get_option( $this->option_name . '_hide_wp_updates', false );
-		return (bool) $hide_wp_updates;
+		if ( ! (bool) get_option( $this->option_name . '_hide_wp_updates', false ) ) {
+			return false;
+		}
+
+		// 自動更新が実際に機能している（ドメインパターンに合致する）環境でのみ通知を抑止する.
+		// 合致しない環境で通知まで消すと、更新もされず気づきようもない「放置状態」を生む.
+		return $this->is_production_domain();
 	}
 
 	/**
