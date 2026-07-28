@@ -32,7 +32,7 @@ class FAUC_Auto_Update_Controller {
 	private $option_name = 'FAUC_forced_auto_update_domain';
 
 	/**
-	 * is_production_domain() の結果のメモ化キャッシュ（未計算時は null）.
+	 * 関数 is_production_domain() の結果のメモ化キャッシュ（未計算時は null）.
 	 *
 	 * @var bool|null
 	 */
@@ -733,7 +733,7 @@ class FAUC_Auto_Update_Controller {
 	}
 
 	/**
-	 * is_production_domain() の実処理（メモ化なし）.
+	 * 関数 is_production_domain() の実処理（メモ化なし）.
 	 *
 	 * @return bool
 	 */
