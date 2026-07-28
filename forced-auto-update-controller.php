@@ -10,6 +10,7 @@
  * Author:            lunaluna_dev
  * Author URI:        https://profiles.wordpress.org/lunaluna_dev/
  * Update URI:        false
+ * Network:           false
  * License:           GPLv2 or later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain:       forced-auto-update-controller

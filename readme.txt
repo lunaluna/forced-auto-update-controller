@@ -13,6 +13,17 @@ Forced Auto update Controller is a plugin that allows you to enable automatic up
 1. Upload the `forced-auto-update-controller` folder to the `/wp-content/plugins/` directory.
 2. Activate the plugin through the \'Plugins\' menu in WordPress.
 
+== Frequently Asked Questions ==
+
+= Does this plugin support WordPress Multisite? =
+
+No. Multisite is not officially supported. This plugin evaluates its domain
+pattern per-site (via `home_url`/`get_option('home')`), but some of the
+settings it controls (e.g. `auto_update_core_minor`) are network-wide
+options. Activating this plugin on an individual subsite of a network can
+therefore affect the entire network in unintended ways. Use at your own
+risk in a Multisite environment.
+
 == Changelog ==
 
 = 1.6.3 =

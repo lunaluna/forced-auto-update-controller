@@ -84,6 +84,18 @@ class FAUC_Auto_Update_Controller {
 		add_action( 'admin_notices', array( $this, 'render_unconfigured_or_mismatch_notice' ) );
 
 		/**
+		 * (8-2) マルチサイト環境では正式サポート対象外であることを警告する.
+		 *
+		 * 本プラグインはサブサイト単位の home_url() 判定でネットワーク全体の
+		 * オプション（auto_update_core_minor 等）を上書きするため、ネットワーク全体へ
+		 * 意図しない影響が及ぶ可能性がある。マルチサイトでの利用は非推奨として明示する.
+		 */
+		if ( is_multisite() ) {
+			add_action( 'admin_notices', array( $this, 'render_multisite_unsupported_notice' ) );
+			add_action( 'network_admin_notices', array( $this, 'render_multisite_unsupported_notice' ) );
+		}
+
+		/**
 		 * (9) WordPress本体のアップデート通知を非表示にする
 		 *     - 「Update 通知設定」でチェックが入っている場合にのみ実行する
 		 *     - 更新バッジやダッシュボード上部のバナーを制御するフィルター: wp_get_update_data
@@ -92,8 +104,10 @@ class FAUC_Auto_Update_Controller {
 
 		/**
 		 *  (9-1) コアアップデートがある際に管理画面上部に表示されるバナー "WordPress x.x.x が利用可能です" を削除
+		 *        （通常の管理画面・ネットワーク管理画面の両方が対象）
 		 */
 		add_action( 'admin_head', array( $this, 'remove_update_nag_for_core' ), 9999 );
+		add_action( 'network_admin_head', array( $this, 'remove_update_nag_for_core' ), 9999 );
 
 		/**
 		 * (10) マイナーアップデートのトグル表示を制御.
@@ -1089,6 +1103,24 @@ class FAUC_Auto_Update_Controller {
 	}
 
 	/**
+	 * マルチサイト環境で本プラグインが正式サポート対象外であることを警告する.
+	 *
+	 * サブサイト単位のドメイン判定でネットワーク全体のオプションを上書きする
+	 * 設計上の制約により、意図しないサイト間の影響が起こり得ることを明示する.
+	 *
+	 * @return void
+	 */
+	public function render_multisite_unsupported_notice() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		echo '<div class="notice notice-warning">';
+		echo '<p>' . esc_html__( 'Forced Auto Update Controller: マルチサイト環境は正式にサポートしていません。サブサイト単位のドメイン判定でネットワーク全体の自動更新設定を上書きするため、意図しないサイトへ影響が及ぶ可能性があります。ご利用は自己責任でお願いします。', 'forced-auto-update-controller' ) . '</p>';
+		echo '</div>';
+	}
+
+	/**
 	 * (8) 管理者の場合のみ、ダッシュボードにメタボックスを追加
 	 *
 	 * @return void
@@ -1192,12 +1224,16 @@ class FAUC_Auto_Update_Controller {
 	 * (9-1) コアアップデートがある際に管理画面上部に表示されるバナー "WordPress x.x.x が利用可能です" を削除
 	 * （update_nag は WordPress本体更新用の通知に限るので、プラグイン更新には影響しない）
 	 *
+	 * ネットワーク管理画面では admin_notices ではなく network_admin_notices に
+	 * 同名のフックが登録されているため、両方から取り除く必要がある.
+	 *
 	 * @return void
 	 */
 	public function remove_update_nag_for_core() {
 		if ( $this->should_hide_wp_update_notifications() ) {
 			// update_nag フックを削除する → WPコア向けバナーの削除.
 			remove_action( 'admin_notices', 'update_nag', 3 );
+			remove_action( 'network_admin_notices', 'update_nag', 3 );
 		}
 	}
 
