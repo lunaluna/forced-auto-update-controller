@@ -66,6 +66,9 @@ class FAUC_Auto_Update_Controller {
 		// (8) 管理者のみダッシュボードにメタボックス追加.
 		add_action( 'wp_dashboard_setup', array( $this, 'add_dashboard_meta_box_warning' ) );
 
+		// (8-1) ドメインパターン未設定・不一致が続いている場合、管理画面に常時警告を表示.
+		add_action( 'admin_notices', array( $this, 'render_unconfigured_or_mismatch_notice' ) );
+
 		/**
 		 * (9) WordPress本体のアップデート通知を非表示にする
 		 *     - 「Update 通知設定」でチェックが入っている場合にのみ実行する
@@ -193,6 +196,15 @@ class FAUC_Auto_Update_Controller {
 			'FAUC_forced_auto_update_section'
 		);
 
+		// 非本番環境でもコアのマイナー/セキュリティ自動更新を許可するかどうか.
+		add_settings_field(
+			'FAUC_allow_core_minor_everywhere_field',
+			__( '非本番環境でもコアのマイナー/セキュリティ自動更新を許可する', 'forced-auto-update-controller' ),
+			array( $this, 'allow_core_minor_everywhere_field_callback' ),
+			'fauc-forced-auto-update-controller',
+			'FAUC_forced_auto_update_section'
+		);
+
 		/**
 		 * -----------------------
 		 * Update 通知設定セクション
@@ -260,6 +272,17 @@ class FAUC_Auto_Update_Controller {
 				'type'              => 'boolean',
 				'sanitize_callback' => 'rest_sanitize_boolean',
 				'default'           => false,
+			)
+		);
+
+		// 非本番環境でもコアのマイナー/セキュリティ自動更新を許可する（デフォルト ON）.
+		register_setting(
+			'fauc-forced-auto-update-controller',
+			$this->option_name . '_allow_core_minor_everywhere',
+			array(
+				'type'              => 'boolean',
+				'sanitize_callback' => 'rest_sanitize_boolean',
+				'default'           => true,
 			)
 		);
 	}
@@ -419,6 +442,22 @@ class FAUC_Auto_Update_Controller {
 		} else {
 			echo '<p>' . esc_html__( 'テーマがインストールされていません。', 'forced-auto-update-controller' ) . '</p>';
 		}
+	}
+
+	/**
+	 * 「非本番環境でもコアのマイナー/セキュリティ自動更新を許可する」チェックボックスのHTMLを出力.
+	 *
+	 * @return void
+	 */
+	public function allow_core_minor_everywhere_field_callback() {
+		$option = get_option( $this->option_name . '_allow_core_minor_everywhere', true );
+
+		printf(
+			'<label><input type="checkbox" name="%1$s" value="1" %2$s /> %3$s</label>',
+			esc_attr( $this->option_name . '_allow_core_minor_everywhere' ),
+			checked( $option, true, false ),
+			esc_html__( 'ドメインパターンに一致しない環境でも、コアのマイナー/セキュリティ自動更新のみは許可します（推奨）。', 'forced-auto-update-controller' )
+		);
 	}
 
 	/**
@@ -587,6 +626,33 @@ class FAUC_Auto_Update_Controller {
 	}
 
 	/**
+	 * ドメインパターンが一度でも設定されているかどうかを判定.
+	 *
+	 * 未設定の場合、本プラグインは一切のフィルタに介入せず WordPress の
+	 * デフォルト挙動（$update をそのまま返す）に委ねる。設定前に有効化しただけで
+	 * コアのマイナー/セキュリティ自動更新まで強制停止してしまうフェイルセーフ不備を防ぐ.
+	 *
+	 * @return bool 設定済みなら true.
+	 */
+	private function is_configured() {
+		return '' !== trim( (string) get_option( $this->option_name, '' ) );
+	}
+
+	/**
+	 * 非本番（ドメインパターン不一致）環境でも、コアのマイナー/セキュリティ自動更新を
+	 * 許可するかどうかの設定値を取得する（デフォルト ON）.
+	 *
+	 * 非本番環境で本来問題になり得るのは Git 管理ファイルの書き換えであり、
+	 * それは automatic_updates_is_vcs_checkout（M-4）が担保する領域. セキュリティ
+	 * パッチまで一律に止める必要はない.
+	 *
+	 * @return bool
+	 */
+	private function allow_core_minor_updates_everywhere() {
+		return (bool) get_option( $this->option_name . '_allow_core_minor_everywhere', true );
+	}
+
+	/**
 	 * (1) Git などのバージョン管理下でも自動更新を許可するかどうか制御.
 	 *
 	 * @param bool $checkout true: バージョン管理下, false: 非管理です.
@@ -614,15 +680,25 @@ class FAUC_Auto_Update_Controller {
 	 * @return bool メジャーアップデート許可状況に応じた結果です.
 	 */
 	public function control_auto_update_core( $update, $item ) {
-		if ( ! $this->is_production_domain() ) {
-			return false;
+		// ドメインパターン未設定時は介入しない（WordPress のデフォルト挙動に委ねる）.
+		if ( ! $this->is_configured() ) {
+			return $update;
 		}
 
-		if ( $this->is_core_major_update( $item ) ) {
-			return $this->is_major_core_auto_update_enabled();
+		if ( $this->is_production_domain() ) {
+			if ( $this->is_core_major_update( $item ) ) {
+				return $this->is_major_core_auto_update_enabled();
+			}
+
+			return true;
 		}
 
-		return true;
+		// 非本番環境でも、マイナー/セキュリティ更新は設定で許可できる（デフォルト ON）.
+		if ( ! $this->is_core_major_update( $item ) && $this->allow_core_minor_updates_everywhere() ) {
+			return $update;
+		}
+
+		return false;
 	}
 
 	/**
@@ -713,6 +789,11 @@ class FAUC_Auto_Update_Controller {
 	 * @return bool ドメイン判定による自動更新可否です.
 	 */
 	public function control_auto_update_plugin( $update, $item ) {
+		// ドメインパターン未設定時は介入しない（WordPress のデフォルト挙動に委ねる）.
+		if ( ! $this->is_configured() ) {
+			return $update;
+		}
+
 		// 「除外リスト」に含まれていれば false を返す.
 		$excluded_plugins = get_option( $this->option_name . '_excluded_plugins', array() );
 
@@ -732,7 +813,10 @@ class FAUC_Auto_Update_Controller {
 	 * @return bool ドメイン判定による自動更新可否です.
 	 */
 	public function control_auto_update_theme( $update, $item ) {
-		unset( $update );
+		// ドメインパターン未設定時は介入しない（WordPress のデフォルト挙動に委ねる）.
+		if ( ! $this->is_configured() ) {
+			return $update;
+		}
 
 		$excluded_themes = get_option( $this->option_name . '_excluded_themes', array() );
 
@@ -750,7 +834,10 @@ class FAUC_Auto_Update_Controller {
 	 * @return bool ドメイン判定による自動更新可否です.
 	 */
 	public function control_auto_update_translation( $update ) {
-		unset( $update );
+		// ドメインパターン未設定時は介入しない（WordPress のデフォルト挙動に委ねる）.
+		if ( ! $this->is_configured() ) {
+			return $update;
+		}
 
 		return $this->is_production_domain();
 	}
@@ -777,6 +864,44 @@ class FAUC_Auto_Update_Controller {
 		unset( $enabled );
 
 		return $this->is_production_domain();
+	}
+
+	/**
+	 * ドメインパターンが未設定、または保存済みパターンが現在のサイトと一致していない状態が
+	 * 続いている場合に、管理画面へ常時警告を表示する（dismissible にしない）.
+	 *
+	 * 自動更新の強制制御が働いていないことに管理者が気づけないまま放置される事態を防ぐ.
+	 *
+	 * @return void
+	 */
+	public function render_unconfigured_or_mismatch_notice() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		if ( $this->is_configured() && $this->is_production_domain() ) {
+			return;
+		}
+
+		$settings_url = admin_url( 'options-general.php?page=fauc-forced-auto-update-controller' );
+
+		echo '<div class="notice notice-warning">';
+		if ( ! $this->is_configured() ) {
+			printf(
+				'<p>%s <a href="%s">%s</a></p>',
+				esc_html__( 'Forced Auto Update Controller: ドメインパターンが未設定です。設定するまで自動更新の強制制御は行われません。', 'forced-auto-update-controller' ),
+				esc_url( $settings_url ),
+				esc_html__( '設定画面へ', 'forced-auto-update-controller' )
+			);
+		} else {
+			printf(
+				'<p>%s <a href="%s">%s</a></p>',
+				esc_html__( 'Forced Auto Update Controller: 保存済みのドメインパターンが現在のサイトドメインと一致していません。自動更新の強制制御は無効の状態です。', 'forced-auto-update-controller' ),
+				esc_url( $settings_url ),
+				esc_html__( '設定画面へ', 'forced-auto-update-controller' )
+			);
+		}
+		echo '</div>';
 	}
 
 	/**
