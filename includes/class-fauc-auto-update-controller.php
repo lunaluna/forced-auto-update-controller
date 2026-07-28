@@ -1035,16 +1035,12 @@ class FAUC_Auto_Update_Controller {
 		// メタボックスのコンテンツをラップする div にクラスを追加.
 		echo '<div class="forced-auto-update-warning match-pattern">';
 
-		// メッセージを出力.
-		// __() 関数を使用して翻訳可能な文字列を取得し、wp_kses_post() で許可された HTML タグのみを許可.
-		echo wp_kses_post(
-			__(
-				'<h3 style="font-weight:700;">このサイトに関する注意事項</h3>
-				<p>このサイトは Git などでバージョン管理されていますが、Forced Auto update Controller プラグインにより自動更新が強制的に有効になっています。</p>
-				<p>サーバー上のファイルが自動で更新され、Git などバージョン管理との整合が崩れる恐れがありますので、作業着手前にドメインで指定された環境の差分をコミットする、あるいは差分をいったんすべて削除してからデプロイするなど、Git との連携において留意すべき点があることに充分注意してください。</p>',
-				'forced-auto-update-controller'
-			)
-		);
+		// マークアップは PHP 側で組み立て、__() には翻訳対象のテキストのみを渡す.
+		// 翻訳ファイル経由で任意の HTML やリンクが混入する余地をなくすため.
+		echo '<style>.fauc-notice-heading{font-weight:700;}</style>';
+		echo '<h3 class="fauc-notice-heading">' . esc_html__( 'このサイトに関する注意事項', 'forced-auto-update-controller' ) . '</h3>';
+		echo '<p>' . esc_html__( 'このサイトは Git などでバージョン管理されていますが、Forced Auto update Controller プラグインにより自動更新が強制的に有効になっています。', 'forced-auto-update-controller' ) . '</p>';
+		echo '<p>' . esc_html__( 'サーバー上のファイルが自動で更新され、Git などバージョン管理との整合が崩れる恐れがありますので、作業着手前にドメインで指定された環境の差分をコミットする、あるいは差分をいったんすべて削除してからデプロイするなど、Git との連携において留意すべき点があることに充分注意してください。', 'forced-auto-update-controller' ) . '</p>';
 
 		// 通知抑止設定の有無にかかわらず、現状を常時可視化する.
 		$this->render_core_update_status();
@@ -1063,16 +1059,11 @@ class FAUC_Auto_Update_Controller {
 		// メタボックスのコンテンツをラップする div にクラスを追加.
 		echo '<div class="forced-auto-update-warning">';
 
-		// メッセージを出力.
-		// __() 関数を使用して翻訳可能な文字列を取得し、wp_kses_post() で許可された HTML タグのみを許可.
-		echo wp_kses_post(
-			__(
-				'<h3 style="font-weight:700;">このサイトに関する注意事項</h3>
-				<p>このサイトは Git などでバージョン管理されていますが、Forced Auto update Controller プラグインのドメインパターンに合致したサイト（公開環境など）では自動更新が有効になっています。</p>
-				<p>この場合、ドメインパターンに合致したサイトではサーバー上のファイルが自動で更新され、Git などバージョン管理との整合が崩れる恐れがあります。<br>作業着手前にドメインで指定された環境の差分をコミットする、あるいは差分をいったんすべて削除してからデプロイするなど、Git との連携において留意すべき点があることに充分注意してください。</p>',
-				'forced-auto-update-controller'
-			)
-		);
+		// マークアップは PHP 側で組み立て、__() には翻訳対象のテキストのみを渡す.
+		echo '<style>.fauc-notice-heading{font-weight:700;}</style>';
+		echo '<h3 class="fauc-notice-heading">' . esc_html__( 'このサイトに関する注意事項', 'forced-auto-update-controller' ) . '</h3>';
+		echo '<p>' . esc_html__( 'このサイトは Git などでバージョン管理されていますが、Forced Auto update Controller プラグインのドメインパターンに合致したサイト（公開環境など）では自動更新が有効になっています。', 'forced-auto-update-controller' ) . '</p>';
+		echo '<p>' . esc_html__( 'この場合、ドメインパターンに合致したサイトではサーバー上のファイルが自動で更新され、Git などバージョン管理との整合が崩れる恐れがあります。作業着手前にドメインで指定された環境の差分をコミットする、あるいは差分をいったんすべて削除してからデプロイするなど、Git との連携において留意すべき点があることに充分注意してください。', 'forced-auto-update-controller' ) . '</p>';
 
 		// 通知抑止設定の有無にかかわらず、現状を常時可視化する.
 		$this->render_core_update_status();
