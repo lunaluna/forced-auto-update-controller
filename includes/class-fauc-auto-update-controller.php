@@ -329,17 +329,29 @@ class FAUC_Auto_Update_Controller {
 	 * @return void
 	 */
 	public function domain_field_callback() {
-		$value = get_option( $this->option_name );
-		echo '<p>' . esc_html__( 'ここに有効化したいサイトのドメインを入力します。サブディレクトリで公開している場合はサブディレクトリも含めてください。「https://」や最後の「/」は不要です。', 'forced-auto-update-controller' ) . '</p>';
-		printf(
-			'<input type="text" name="%1$s" value="%2$s" class="regular-text" placeholder="%3$s" />',
-			esc_attr( $this->option_name ),
-			esc_attr( $value ),
-			esc_attr__( '例: example.com、example.com/sample など', 'forced-auto-update-controller' )
-		);
+		$overridden_by_constant = $this->is_domain_overridden_by_constant();
+		$value                  = $overridden_by_constant ? FAUC_PRODUCTION_DOMAIN : get_option( $this->option_name );
 
-		// 診断情報を表示.
-		$url_parts = wp_parse_url( home_url() );
+		echo '<p>' . esc_html__( 'ここに有効化したいサイトのドメインを入力します。サブディレクトリで公開している場合はサブディレクトリも含めてください。「https://」や最後の「/」は不要です。', 'forced-auto-update-controller' ) . '</p>';
+
+		if ( $overridden_by_constant ) {
+			printf(
+				'<input type="text" value="%1$s" class="regular-text" readonly disabled />',
+				esc_attr( $value )
+			);
+			echo '<p class="description">' . esc_html__( 'FAUC_PRODUCTION_DOMAIN 定数で固定されているため、この設定は無効です（定数の値が優先されます）。', 'forced-auto-update-controller' ) . '</p>';
+		} else {
+			printf(
+				'<input type="text" name="%1$s" value="%2$s" class="regular-text" placeholder="%3$s" />',
+				esc_attr( $this->option_name ),
+				esc_attr( $value ),
+				esc_attr__( '例: example.com、example.com/sample など', 'forced-auto-update-controller' )
+			);
+		}
+
+		// 診断情報を表示. home_url() はフィルタの影響を受けるため、DB上の生値である
+		// get_option('home') を比較対象にする（is_production_domain() と同じ基準）.
+		$url_parts = wp_parse_url( (string) get_option( 'home' ) );
 		$detected  = '';
 		if ( ! empty( $url_parts['host'] ) ) {
 			$detected = $url_parts['host'];
@@ -578,12 +590,39 @@ class FAUC_Auto_Update_Controller {
 	}
 
 	/**
+	 * FAUC_PRODUCTION_DOMAIN 定数でドメインパターンが上書き固定されているかどうか.
+	 *
+	 * 定数が定義されている環境では設定 UI 側の値は無視され、コード側の値が優先される.
+	 *
+	 * @return bool
+	 */
+	private function is_domain_overridden_by_constant() {
+		return defined( 'FAUC_PRODUCTION_DOMAIN' ) && '' !== trim( (string) FAUC_PRODUCTION_DOMAIN );
+	}
+
+	/**
+	 * 実際に判定に使うドメインパターンを取得する.
+	 *
+	 * FAUC_PRODUCTION_DOMAIN 定数が定義されていればそちらを優先し、
+	 * なければ DB に保存された設定値を使う.
+	 *
+	 * @return string
+	 */
+	private function get_domain_pattern() {
+		if ( $this->is_domain_overridden_by_constant() ) {
+			return (string) FAUC_PRODUCTION_DOMAIN;
+		}
+
+		return (string) get_option( $this->option_name, '' );
+	}
+
+	/**
 	 * 現在の環境がパターンに一致するか（本番環境か）どうかを判定.
 	 *
 	 * @return bool true: 一致（本番） / false: 不一致（非本番）です.
 	 */
 	private function is_production_domain() {
-		$pattern = get_option( $this->option_name );
+		$pattern = $this->get_domain_pattern();
 
 		if ( empty( $pattern ) ) {
 			return false;
@@ -601,7 +640,16 @@ class FAUC_Auto_Update_Controller {
 			return false;
 		}
 
-		$url_parts = wp_parse_url( home_url() );
+		// wp_get_environment_type()（WP 5.5+）を補助的な条件として利用する.
+		// WP_ENVIRONMENT_TYPE 定数/環境変数で明示的に production 以外（staging 等）に
+		// 設定されている環境では、ドメインパターンが一致していても強制しない.
+		if ( function_exists( 'wp_get_environment_type' ) && 'production' !== wp_get_environment_type() ) {
+			return false;
+		}
+
+		// home_url() はフィルタの影響を受け、動的な WP_HOME 定義下では信頼できないため、
+		// DB上の生値である get_option('home') を比較対象にする.
+		$url_parts = wp_parse_url( (string) get_option( 'home' ) );
 
 		if ( empty( $url_parts ) ) {
 			return false;
@@ -626,11 +674,17 @@ class FAUC_Auto_Update_Controller {
 		}
 
 		// 小文字に正規化して比較.
-		if ( strtolower( $host_with_path ) === strtolower( $pattern ) ) {
-			return true;
-		}
+		$result = ( strtolower( $host_with_path ) === strtolower( $pattern ) );
 
-		return false;
+		/**
+		 * 本番ドメイン判定の最終結果をフィルタする.
+		 *
+		 * 緊急停止など、コードレベルで最終的に判定結果を上書きしたい場合に利用する.
+		 *
+		 * @param bool   $result  判定結果です.
+		 * @param string $pattern 判定に使用したドメインパターンです.
+		 */
+		return (bool) apply_filters( 'fauc_is_production_domain', $result, $pattern );
 	}
 
 	/**
@@ -643,7 +697,7 @@ class FAUC_Auto_Update_Controller {
 	 * @return bool 設定済みなら true.
 	 */
 	private function is_configured() {
-		return '' !== trim( (string) get_option( $this->option_name, '' ) );
+		return '' !== trim( $this->get_domain_pattern() );
 	}
 
 	/**
