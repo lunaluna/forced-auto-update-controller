@@ -3,9 +3,11 @@
  * FAUC_Auto_Update_Controller クラスファイル.
  *
  * ドメインパターンを指定し、パターンが一致したら
- *   - コア/プラグイン/テーマ/翻訳ファイルの自動更新を強制的に有効化
+ *   - コア/翻訳ファイルの自動更新を強制的に有効化
+ *   - プラグイン/テーマは、個別トグル（auto_update_plugins/themes）の設定を尊重して
+ *     Git などのバージョン管理下でも自動更新が機能するようにする
  *   - プラグイン/テーマ一覧に自動更新トグルUI (WP5.5+) を表示
- *   - ただし、チェックが入っているプラグイン・テーマは自動更新を除外
+ *   - ただし、チェックが入っているプラグイン・テーマは自動更新を強制除外
  * それ以外の環境では自動更新を無効化し、UI も非表示にする
  * 優先度 9999 を指定して最終的に上書き
  * さらにオプションとして「WordPress本体のアップデート通知」を非表示にする機能を追加
@@ -30,11 +32,23 @@ class FAUC_Auto_Update_Controller {
 	private $option_name = 'FAUC_forced_auto_update_domain';
 
 	/**
+	 * 関数 is_production_domain() の結果のメモ化キャッシュ（未計算時は null）.
+	 *
+	 * @var bool|null
+	 */
+	private $is_production_domain_cache = null;
+
+	/**
 	 * コンストラクタ
 	 *
 	 * - フィルターフック・アクションフックの登録を行う
 	 */
 	public function __construct() {
+
+		// 緊急停止スイッチ: 定義されていれば、以降のフック登録を一切行わない.
+		if ( defined( 'FAUC_DISABLE' ) && FAUC_DISABLE ) {
+			return;
+		}
 
 		// 設定ページの追加.
 		add_action( 'admin_menu', array( $this, 'add_settings_page' ) );
@@ -66,6 +80,21 @@ class FAUC_Auto_Update_Controller {
 		// (8) 管理者のみダッシュボードにメタボックス追加.
 		add_action( 'wp_dashboard_setup', array( $this, 'add_dashboard_meta_box_warning' ) );
 
+		// (8-1) ドメインパターン未設定・不一致が続いている場合、管理画面に常時警告を表示.
+		add_action( 'admin_notices', array( $this, 'render_unconfigured_or_mismatch_notice' ) );
+
+		/**
+		 * (8-2) マルチサイト環境では正式サポート対象外であることを警告する.
+		 *
+		 * 本プラグインはサブサイト単位の home_url() 判定でネットワーク全体の
+		 * オプション（auto_update_core_minor 等）を上書きするため、ネットワーク全体へ
+		 * 意図しない影響が及ぶ可能性がある。マルチサイトでの利用は非推奨として明示する.
+		 */
+		if ( is_multisite() ) {
+			add_action( 'admin_notices', array( $this, 'render_multisite_unsupported_notice' ) );
+			add_action( 'network_admin_notices', array( $this, 'render_multisite_unsupported_notice' ) );
+		}
+
 		/**
 		 * (9) WordPress本体のアップデート通知を非表示にする
 		 *     - 「Update 通知設定」でチェックが入っている場合にのみ実行する
@@ -75,8 +104,10 @@ class FAUC_Auto_Update_Controller {
 
 		/**
 		 *  (9-1) コアアップデートがある際に管理画面上部に表示されるバナー "WordPress x.x.x が利用可能です" を削除
+		 *        （通常の管理画面・ネットワーク管理画面の両方が対象）
 		 */
 		add_action( 'admin_head', array( $this, 'remove_update_nag_for_core' ), 9999 );
+		add_action( 'network_admin_head', array( $this, 'remove_update_nag_for_core' ), 9999 );
 
 		/**
 		 * (10) マイナーアップデートのトグル表示を制御.
@@ -94,6 +125,24 @@ class FAUC_Auto_Update_Controller {
 		 */
 		add_filter( 'pre_site_option_auto_update_core_minor', array( $this, 'force_core_minor_option' ), 9999 );
 		add_filter( 'pre_option_auto_update_core_minor', array( $this, 'force_core_minor_option' ), 9999 );
+
+		/**
+		 * (12) Site Health に「更新通知抑止とコア自動更新の整合性」テストを追加.
+		 *
+		 * 「WordPress本体の更新通知を非表示にする」がONなのにコア自動更新が実際には
+		 * 機能していない状態（放置状態）を critical として検出する.
+		 */
+		add_filter( 'site_status_tests', array( $this, 'register_site_health_test' ) );
+
+		/**
+		 * (13) 自動更新が実行されたことを管理者へ通知する.
+		 *
+		 * Git などバージョン管理下のサーバーでファイルが自動更新されると、
+		 * 次回デプロイ時に差分の巻き戻しが起きうる（M-4）。実行結果を記録し、
+		 * 管理画面に通知することでデプロイ前に気づけるようにする.
+		 */
+		add_action( 'automatic_updates_complete', array( $this, 'handle_automatic_updates_complete' ) );
+		add_action( 'admin_notices', array( $this, 'render_last_auto_update_notice' ) );
 	}
 
 	/**
@@ -193,6 +242,15 @@ class FAUC_Auto_Update_Controller {
 			'FAUC_forced_auto_update_section'
 		);
 
+		// 非本番環境でもコアのマイナー/セキュリティ自動更新を許可するかどうか.
+		add_settings_field(
+			'FAUC_allow_core_minor_everywhere_field',
+			__( '非本番環境でもコアのマイナー/セキュリティ自動更新を許可する', 'forced-auto-update-controller' ),
+			array( $this, 'allow_core_minor_everywhere_field_callback' ),
+			'fauc-forced-auto-update-controller',
+			'FAUC_forced_auto_update_section'
+		);
+
 		/**
 		 * -----------------------
 		 * Update 通知設定セクション
@@ -262,6 +320,17 @@ class FAUC_Auto_Update_Controller {
 				'default'           => false,
 			)
 		);
+
+		// 非本番環境でもコアのマイナー/セキュリティ自動更新を許可する（デフォルト ON）.
+		register_setting(
+			'fauc-forced-auto-update-controller',
+			$this->option_name . '_allow_core_minor_everywhere',
+			array(
+				'type'              => 'boolean',
+				'sanitize_callback' => 'rest_sanitize_boolean',
+				'default'           => true,
+			)
+		);
 	}
 
 	/**
@@ -272,7 +341,7 @@ class FAUC_Auto_Update_Controller {
 	public function settings_section_callback() {
 		echo '<p>';
 		echo esc_html__(
-			'指定したドメインに合致した場合は自動アップデートを強制的に有効化します。ただし、下記のチェックリストで除外したプラグイン・テーマは自動更新されません。',
+			'指定したドメインに合致した場合、Git などのバージョン管理下でも各プラグイン・テーマの個別の自動更新設定が有効に機能するようになります。下記のチェックリストで除外したプラグイン・テーマは、個別設定の状態にかかわらず自動更新されません。',
 			'forced-auto-update-controller'
 		);
 		echo '</p>';
@@ -298,17 +367,29 @@ class FAUC_Auto_Update_Controller {
 	 * @return void
 	 */
 	public function domain_field_callback() {
-		$value = get_option( $this->option_name );
-		echo '<p>' . esc_html__( 'ここに有効化したいサイトのドメインを入力します。サブディレクトリで公開している場合はサブディレクトリも含めてください。「https://」や最後の「/」は不要です。', 'forced-auto-update-controller' ) . '</p>';
-		printf(
-			'<input type="text" name="%1$s" value="%2$s" class="regular-text" placeholder="%3$s" />',
-			esc_attr( $this->option_name ),
-			esc_attr( $value ),
-			esc_attr__( '例: example.com、example.com/sample など', 'forced-auto-update-controller' )
-		);
+		$overridden_by_constant = $this->is_domain_overridden_by_constant();
+		$value                  = $overridden_by_constant ? (string) FAUC_PRODUCTION_DOMAIN : (string) get_option( $this->option_name, '' );
 
-		// 診断情報を表示.
-		$url_parts = wp_parse_url( home_url() );
+		echo '<p>' . esc_html__( 'ここに有効化したいサイトのドメインを入力します。複数の本番ドメイン（www の有無や複数系統の運用など）がある場合は1行に1つずつ入力してください。サブディレクトリで公開している場合はサブディレクトリも含めてください。「https://」や最後の「/」は不要です。', 'forced-auto-update-controller' ) . '</p>';
+
+		if ( $overridden_by_constant ) {
+			printf(
+				'<textarea class="large-text code" rows="3" readonly disabled>%s</textarea>',
+				esc_textarea( $value )
+			);
+			echo '<p class="description">' . esc_html__( 'FAUC_PRODUCTION_DOMAIN 定数で固定されているため、この設定は無効です（定数の値が優先されます）。', 'forced-auto-update-controller' ) . '</p>';
+		} else {
+			printf(
+				'<textarea name="%1$s" class="large-text code" rows="3" placeholder="%2$s">%3$s</textarea>',
+				esc_attr( $this->option_name ),
+				esc_attr__( "example.com\nexample.com/sample", 'forced-auto-update-controller' ),
+				esc_textarea( $value )
+			);
+		}
+
+		// 診断情報を表示. home_url() はフィルタの影響を受けるため、DB上の生値である
+		// get_option('home') を比較対象にする（is_production_domain() と同じ基準）.
+		$url_parts = wp_parse_url( (string) get_option( 'home' ) );
 		$detected  = '';
 		if ( ! empty( $url_parts['host'] ) ) {
 			$detected = $url_parts['host'];
@@ -321,6 +402,14 @@ class FAUC_Auto_Update_Controller {
 			}
 		}
 
+		$patterns = array();
+		foreach ( preg_split( '/\r\n|\r|\n/', $value ) as $line ) {
+			$line = trim( $line );
+			if ( '' !== $line ) {
+				$patterns[] = strtolower( $line );
+			}
+		}
+
 		echo '<div style="margin-top:8px;padding:8px 12px;background:#f0f0f1;border-left:4px solid #2271b1;">';
 		printf(
 			'<p style="margin:0 0 4px;"><strong>%s</strong> <code>%s</code></p>',
@@ -328,8 +417,8 @@ class FAUC_Auto_Update_Controller {
 			esc_html( $detected )
 		);
 
-		if ( ! empty( $value ) && '' !== $detected ) {
-			if ( strtolower( $detected ) === strtolower( $value ) ) {
+		if ( ! empty( $patterns ) && '' !== $detected ) {
+			if ( in_array( strtolower( $detected ), $patterns, true ) ) {
 				printf(
 					'<p style="margin:0;color:#00a32a;">&#10003; %s</p>',
 					esc_html__( '保存済みパターンと一致しています。プラグインの自動更新制御は有効です。', 'forced-auto-update-controller' )
@@ -342,12 +431,12 @@ class FAUC_Auto_Update_Controller {
 				printf(
 					'<p style="margin:4px 0 0;color:#50575e;font-size:12px;">%s <code>%s</code> / %s <code>%s</code></p>',
 					esc_html__( '保存値:', 'forced-auto-update-controller' ),
-					esc_html( $value ),
+					esc_html( implode( ', ', $patterns ) ),
 					esc_html__( '検出値:', 'forced-auto-update-controller' ),
 					esc_html( strtolower( $detected ) )
 				);
 			}
-		} elseif ( empty( $value ) ) {
+		} elseif ( empty( $patterns ) ) {
 			printf(
 				'<p style="margin:0;color:#dba617;">&#9888; %s</p>',
 				esc_html__( 'ドメインパターンが未設定です。上記の検出値を参考に入力してください。', 'forced-auto-update-controller' )
@@ -422,6 +511,22 @@ class FAUC_Auto_Update_Controller {
 	}
 
 	/**
+	 * 「非本番環境でもコアのマイナー/セキュリティ自動更新を許可する」チェックボックスのHTMLを出力.
+	 *
+	 * @return void
+	 */
+	public function allow_core_minor_everywhere_field_callback() {
+		$option = get_option( $this->option_name . '_allow_core_minor_everywhere', true );
+
+		printf(
+			'<label><input type="checkbox" name="%1$s" value="1" %2$s /> %3$s</label>',
+			esc_attr( $this->option_name . '_allow_core_minor_everywhere' ),
+			checked( $option, true, false ),
+			esc_html__( 'ドメインパターンに一致しない環境でも、コアのマイナー/セキュリティ自動更新のみは許可します（推奨）。', 'forced-auto-update-controller' )
+		);
+	}
+
+	/**
 	 * WordPress本体のアップデート通知を非表示にするチェックボックスのHTMLを出力
 	 *
 	 * @return void
@@ -442,42 +547,66 @@ class FAUC_Auto_Update_Controller {
 	/**
 	 * ドメインパターンのサニタイズおよびバリデーションコールバック.
 	 *
-	 * @param string $input ユーザー入力値です.
-	 * @return string サニタイズおよびバリデーション後の値です.
+	 * このコールバックは sanitize_option_{$option} フィルタ経由で update_option() からも
+	 * 呼ばれうるため、$input には null が渡る可能性がある
+	 * （PHP 8.1+ では非文字列を trim() に渡すと deprecation になる）.
+	 * 1行に1つずつドメインパターンを入力することで、複数の本番ドメイン
+	 * （www有無、複数系統の運用など）に対応できるようにする.
+	 *
+	 * @param mixed $input ユーザー入力値です.
+	 * @return string サニタイズおよびバリデーション後の値です（複数行の場合は改行区切り）.
 	 */
 	public function sanitize_domain_pattern( $input ) {
-		// トリムして空白を削除.
-		$pattern = trim( $input );
+		$input = (string) $input;
 
-		// 先頭の 'https://' または 'http://' を削除.
-		$pattern = preg_replace( '#^https?://#i', '', $pattern );
+		$valid_patterns = array();
 
-		// 末尾の '/' を削除.
-		$pattern = rtrim( $pattern, '/' );
+		foreach ( preg_split( '/\r\n|\r|\n/', $input ) as $line ) {
+			$pattern = trim( $line );
 
-		// パターンが空になったら設定エラーを追加し、空文字列を返す.
-		if ( empty( $pattern ) ) {
+			if ( '' === $pattern ) {
+				continue;
+			}
+
+			// 先頭の 'https://' または 'http://' を削除.
+			$pattern = preg_replace( '#^https?://#i', '', $pattern );
+
+			// 末尾の '/' を削除.
+			$pattern = rtrim( $pattern, '/' );
+
+			if ( '' === $pattern ) {
+				continue;
+			}
+
+			// ドメイン（punycode TLD可・ポート番号可）＋任意の深さのパスを検証.
+			if ( ! preg_match( '/^[a-z0-9.-]+\.[a-z0-9-]{2,}(:[0-9]+)?(\/[a-z0-9_.~-]+)*$/i', $pattern ) ) {
+				add_settings_error(
+					'fauc-forced-auto-update-controller-notices',
+					'FAUC_invalid_domain_pattern_format',
+					sprintf(
+						/* translators: %s: 無効な入力行です. */
+						__( 'ドメインパターンの形式が正しくありません: 「%s」。例: example.com、example.com/sample など', 'forced-auto-update-controller' ),
+						$pattern
+					),
+					'error'
+				);
+				continue;
+			}
+
+			$valid_patterns[] = strtolower( $pattern );
+		}
+
+		if ( empty( $valid_patterns ) ) {
 			add_settings_error(
 				'fauc-forced-auto-update-controller-notices',
 				'FAUC_invalid_domain_pattern',
-				__( 'ドメインパターンが無効です。正しい形式で入力してください。', 'forced-auto-update-controller' ),
+				__( 'ドメインパターンが無効です。1行に1つずつ、正しい形式で入力してください。', 'forced-auto-update-controller' ),
 				'error'
 			);
 			return '';
 		}
 
-		// ドメイン（ポート番号可）＋任意の深さのパスを検証.
-		if ( ! preg_match( '/^[a-z0-9.-]+\.[a-z]{2,}(:[0-9]+)?(\/[a-z0-9_.~-]+)*$/i', $pattern ) ) {
-			add_settings_error(
-				'fauc-forced-auto-update-controller-notices',
-				'FAUC_invalid_domain_pattern_format',
-				__( 'ドメインパターンの形式が正しくありません。例: example.com、example.com/sample など', 'forced-auto-update-controller' ),
-				'error'
-			);
-			return '';
-		}
-
-		return strtolower( $pattern );
+		return implode( "\n", array_values( array_unique( $valid_patterns ) ) );
 	}
 
 	/**
@@ -531,30 +660,100 @@ class FAUC_Auto_Update_Controller {
 	}
 
 	/**
-	 * 現在の環境がパターンに一致するか（本番環境か）どうかを判定.
+	 * FAUC_PRODUCTION_DOMAIN 定数でドメインパターンが上書き固定されているかどうか.
+	 *
+	 * 定数が定義されている環境では設定 UI 側の値は無視され、コード側の値が優先される.
+	 *
+	 * @return bool
+	 */
+	private function is_domain_overridden_by_constant() {
+		return defined( 'FAUC_PRODUCTION_DOMAIN' ) && '' !== trim( (string) FAUC_PRODUCTION_DOMAIN );
+	}
+
+	/**
+	 * 実際に判定に使うドメインパターン（生の文字列。複数行の場合あり）を取得する.
+	 *
+	 * FAUC_PRODUCTION_DOMAIN 定数が定義されていればそちらを優先し、
+	 * なければ DB に保存された設定値を使う.
+	 *
+	 * @return string
+	 */
+	private function get_domain_pattern() {
+		if ( $this->is_domain_overridden_by_constant() ) {
+			return (string) FAUC_PRODUCTION_DOMAIN;
+		}
+
+		return (string) get_option( $this->option_name, '' );
+	}
+
+	/**
+	 * ドメインパターンを改行区切りで複数指定できるようにするため、
+	 * 空行を除いた個々のパターンの配列に分解する.
+	 *
+	 * 本番環境が複数系統（例: www有無、複数ドメインでの提供）ある運用に対応するため.
+	 *
+	 * @return string[] 個々のドメインパターン（トリム済み・空行除外）です.
+	 */
+	private function get_domain_patterns() {
+		$raw = $this->get_domain_pattern();
+
+		if ( '' === trim( $raw ) ) {
+			return array();
+		}
+
+		$patterns = array();
+
+		foreach ( preg_split( '/\r\n|\r|\n/', $raw ) as $line ) {
+			$line = trim( (string) $line );
+
+			if ( '' !== $line ) {
+				$patterns[] = $line;
+			}
+		}
+
+		return $patterns;
+	}
+
+	/**
+	 * 現在の環境がいずれかのパターンに一致するか（本番環境か）どうかを判定.
+	 *
+	 * 判定結果はリクエスト中に何度も呼ばれる（プラグイン数分ループするフィルタも
+	 * 含む）ため、インスタンスプロパティにメモ化して都度の get_option / preg_match を避ける.
 	 *
 	 * @return bool true: 一致（本番） / false: 不一致（非本番）です.
 	 */
 	private function is_production_domain() {
-		$pattern = get_option( $this->option_name );
+		if ( null !== $this->is_production_domain_cache ) {
+			return $this->is_production_domain_cache;
+		}
 
-		if ( empty( $pattern ) ) {
+		$this->is_production_domain_cache = $this->compute_is_production_domain();
+
+		return $this->is_production_domain_cache;
+	}
+
+	/**
+	 * 関数 is_production_domain() の実処理（メモ化なし）.
+	 *
+	 * @return bool
+	 */
+	private function compute_is_production_domain() {
+		$patterns = $this->get_domain_patterns();
+
+		if ( empty( $patterns ) ) {
 			return false;
 		}
 
-		$pattern = preg_replace( '#^https?://#i', '', $pattern );
-		$pattern = rtrim( $pattern, '/' );
-
-		if ( empty( $pattern ) ) {
+		// wp_get_environment_type()（WP 5.5+）を補助的な条件として利用する.
+		// WP_ENVIRONMENT_TYPE 定数/環境変数で明示的に production 以外（staging 等）に
+		// 設定されている環境では、ドメインパターンが一致していても強制しない.
+		if ( function_exists( 'wp_get_environment_type' ) && 'production' !== wp_get_environment_type() ) {
 			return false;
 		}
 
-		// ドメイン（ポート番号可）＋任意の深さのパスを許容.
-		if ( ! preg_match( '/^[a-z0-9.-]+\.[a-z]{2,}(:[0-9]+)?(\/[a-z0-9_.~-]+)*$/i', $pattern ) ) {
-			return false;
-		}
-
-		$url_parts = wp_parse_url( home_url() );
+		// home_url() はフィルタの影響を受け、動的な WP_HOME 定義下では信頼できないため、
+		// DB上の生値である get_option('home') を比較対象にする.
+		$url_parts = wp_parse_url( (string) get_option( 'home' ) );
 
 		if ( empty( $url_parts ) ) {
 			return false;
@@ -578,12 +777,64 @@ class FAUC_Auto_Update_Controller {
 			$host_with_path .= '/' . $path;
 		}
 
-		// 小文字に正規化して比較.
-		if ( strtolower( $host_with_path ) === strtolower( $pattern ) ) {
-			return true;
+		$result = false;
+
+		foreach ( $patterns as $pattern ) {
+			$pattern = preg_replace( '#^https?://#i', '', $pattern );
+			$pattern = rtrim( $pattern, '/' );
+
+			if ( '' === $pattern ) {
+				continue;
+			}
+
+			// ドメイン（punycode TLD可・ポート番号可）＋任意の深さのパスを許容.
+			if ( ! preg_match( '/^[a-z0-9.-]+\.[a-z0-9-]{2,}(:[0-9]+)?(\/[a-z0-9_.~-]+)*$/i', $pattern ) ) {
+				continue;
+			}
+
+			// 小文字に正規化して比較.
+			if ( strtolower( $host_with_path ) === strtolower( $pattern ) ) {
+				$result = true;
+				break;
+			}
 		}
 
-		return false;
+		/**
+		 * 本番ドメイン判定の最終結果をフィルタする.
+		 *
+		 * 緊急停止など、コードレベルで最終的に判定結果を上書きしたい場合に利用する.
+		 *
+		 * @param bool     $result   判定結果です.
+		 * @param string[] $patterns 判定に使用したドメインパターンの配列です.
+		 */
+		return (bool) apply_filters( 'fauc_is_production_domain', $result, $patterns );
+	}
+
+	/**
+	 * ドメインパターンが一度でも設定されているかどうかを判定.
+	 *
+	 * 未設定の場合、本プラグインは一切のフィルタに介入せず WordPress の
+	 * デフォルト挙動（$update をそのまま返す）に委ねる。設定前に有効化しただけで
+	 * コアのマイナー/セキュリティ自動更新まで強制停止してしまうフェイルセーフ不備を防ぐ.
+	 *
+	 * @return bool 設定済みなら true.
+	 */
+	private function is_configured() {
+		return array() !== $this->get_domain_patterns();
+	}
+
+	/**
+	 * 非本番（ドメインパターン不一致）環境でも、コアのマイナー/セキュリティ自動更新を
+	 * 許可するかどうかの設定値を取得する（デフォルト ON）.
+	 *
+	 * 非本番環境で本来問題になり得るのは Git 管理ファイルの書き換えであり、
+	 * それは automatic_updates_is_vcs_checkout（M-4）が担保する領域. セキュリティ
+	 * パッチまで一律に止める必要はない.
+	 *
+	 * @return bool
+	 */
+	private function allow_core_minor_updates_everywhere() {
+		return (bool) get_option( $this->option_name . '_allow_core_minor_everywhere', true );
 	}
 
 	/**
@@ -614,15 +865,25 @@ class FAUC_Auto_Update_Controller {
 	 * @return bool メジャーアップデート許可状況に応じた結果です.
 	 */
 	public function control_auto_update_core( $update, $item ) {
-		if ( ! $this->is_production_domain() ) {
-			return false;
+		// ドメインパターン未設定時は介入しない（WordPress のデフォルト挙動に委ねる）.
+		if ( ! $this->is_configured() ) {
+			return $update;
 		}
 
-		if ( $this->is_core_major_update( $item ) ) {
-			return $this->is_major_core_auto_update_enabled();
+		if ( $this->is_production_domain() ) {
+			if ( $this->is_core_major_update( $item ) ) {
+				return $this->is_major_core_auto_update_enabled();
+			}
+
+			return true;
 		}
 
-		return true;
+		// 非本番環境でも、マイナー/セキュリティ更新は設定で許可できる（デフォルト ON）.
+		if ( ! $this->is_core_major_update( $item ) && $this->allow_core_minor_updates_everywhere() ) {
+			return $update;
+		}
+
+		return false;
 	}
 
 	/**
@@ -713,15 +974,27 @@ class FAUC_Auto_Update_Controller {
 	 * @return bool ドメイン判定による自動更新可否です.
 	 */
 	public function control_auto_update_plugin( $update, $item ) {
-		// 「除外リスト」に含まれていれば false を返す.
+		// ドメインパターン未設定時は介入しない（WordPress のデフォルト挙動に委ねる）.
+		if ( ! $this->is_configured() ) {
+			return $update;
+		}
+
+		// 「除外リスト」に含まれていれば強制的に自動更新から除外する.
 		$excluded_plugins = get_option( $this->option_name . '_excluded_plugins', array() );
 
 		if ( isset( $item->plugin ) && in_array( $item->plugin, $excluded_plugins, true ) ) {
 			return false; // チェック済み → 自動更新除外.
 		}
 
-		// それ以外の場合、ドメインパターンと合致するなら自動更新許可、合致しないなら拒否.
-		return $this->is_production_domain();
+		if ( ! $this->is_production_domain() ) {
+			return false;
+		}
+
+		// 除外リストに含まれないプラグインは、プラグイン一覧の個別トグル
+		// （auto_update_plugins オプション）に基づく $update をそのまま尊重する。
+		// 一律 true にすると、個別に無効化したはずが実際には更新され続ける
+		// 誤った安心（false sense of security）を生むため.
+		return $update;
 	}
 
 	/**
@@ -732,7 +1005,10 @@ class FAUC_Auto_Update_Controller {
 	 * @return bool ドメイン判定による自動更新可否です.
 	 */
 	public function control_auto_update_theme( $update, $item ) {
-		unset( $update );
+		// ドメインパターン未設定時は介入しない（WordPress のデフォルト挙動に委ねる）.
+		if ( ! $this->is_configured() ) {
+			return $update;
+		}
 
 		$excluded_themes = get_option( $this->option_name . '_excluded_themes', array() );
 
@@ -740,7 +1016,13 @@ class FAUC_Auto_Update_Controller {
 			return false; // 除外.
 		}
 
-		return $this->is_production_domain();
+		if ( ! $this->is_production_domain() ) {
+			return false;
+		}
+
+		// 除外リストに含まれないテーマは、テーマ一覧の個別トグル
+		// （auto_update_themes オプション）に基づく $update をそのまま尊重する.
+		return $update;
 	}
 
 	/**
@@ -750,7 +1032,10 @@ class FAUC_Auto_Update_Controller {
 	 * @return bool ドメイン判定による自動更新可否です.
 	 */
 	public function control_auto_update_translation( $update ) {
-		unset( $update );
+		// ドメインパターン未設定時は介入しない（WordPress のデフォルト挙動に委ねる）.
+		if ( ! $this->is_configured() ) {
+			return $update;
+		}
 
 		return $this->is_production_domain();
 	}
@@ -777,6 +1062,62 @@ class FAUC_Auto_Update_Controller {
 		unset( $enabled );
 
 		return $this->is_production_domain();
+	}
+
+	/**
+	 * ドメインパターンが未設定、または保存済みパターンが現在のサイトと一致していない状態が
+	 * 続いている場合に、管理画面へ常時警告を表示する（dismissible にしない）.
+	 *
+	 * 自動更新の強制制御が働いていないことに管理者が気づけないまま放置される事態を防ぐ.
+	 *
+	 * @return void
+	 */
+	public function render_unconfigured_or_mismatch_notice() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		if ( $this->is_configured() && $this->is_production_domain() ) {
+			return;
+		}
+
+		$settings_url = admin_url( 'options-general.php?page=fauc-forced-auto-update-controller' );
+
+		echo '<div class="notice notice-warning">';
+		if ( ! $this->is_configured() ) {
+			printf(
+				'<p>%s <a href="%s">%s</a></p>',
+				esc_html__( 'Forced Auto Update Controller: ドメインパターンが未設定です。設定するまで自動更新の強制制御は行われません。', 'forced-auto-update-controller' ),
+				esc_url( $settings_url ),
+				esc_html__( '設定画面へ', 'forced-auto-update-controller' )
+			);
+		} else {
+			printf(
+				'<p>%s <a href="%s">%s</a></p>',
+				esc_html__( 'Forced Auto Update Controller: 保存済みのドメインパターンが現在のサイトドメインと一致していません。自動更新の強制制御は無効の状態です。', 'forced-auto-update-controller' ),
+				esc_url( $settings_url ),
+				esc_html__( '設定画面へ', 'forced-auto-update-controller' )
+			);
+		}
+		echo '</div>';
+	}
+
+	/**
+	 * マルチサイト環境で本プラグインが正式サポート対象外であることを警告する.
+	 *
+	 * サブサイト単位のドメイン判定でネットワーク全体のオプションを上書きする
+	 * 設計上の制約により、意図しないサイト間の影響が起こり得ることを明示する.
+	 *
+	 * @return void
+	 */
+	public function render_multisite_unsupported_notice() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		echo '<div class="notice notice-warning">';
+		echo '<p>' . esc_html__( 'Forced Auto Update Controller: マルチサイト環境は正式にサポートしていません。サブサイト単位のドメイン判定でネットワーク全体の自動更新設定を上書きするため、意図しないサイトへ影響が及ぶ可能性があります。ご利用は自己責任でお願いします。', 'forced-auto-update-controller' ) . '</p>';
+		echo '</div>';
 	}
 
 	/**
@@ -818,16 +1159,15 @@ class FAUC_Auto_Update_Controller {
 		// メタボックスのコンテンツをラップする div にクラスを追加.
 		echo '<div class="forced-auto-update-warning match-pattern">';
 
-		// メッセージを出力.
-		// __() 関数を使用して翻訳可能な文字列を取得し、wp_kses_post() で許可された HTML タグのみを許可.
-		echo wp_kses_post(
-			__(
-				'<h3 style="font-weight:700;">このサイトに関する注意事項</h3>
-				<p>このサイトは Git などでバージョン管理されていますが、Forced Auto update Controller プラグインにより自動更新が強制的に有効になっています。</p>
-				<p>サーバー上のファイルが自動で更新され、Git などバージョン管理との整合が崩れる恐れがありますので、作業着手前にドメインで指定された環境の差分をコミットする、あるいは差分をいったんすべて削除してからデプロイするなど、Git との連携において留意すべき点があることに充分注意してください。</p>',
-				'forced-auto-update-controller'
-			)
-		);
+		// マークアップは PHP 側で組み立て、__() には翻訳対象のテキストのみを渡す.
+		// 翻訳ファイル経由で任意の HTML やリンクが混入する余地をなくすため.
+		echo '<style>.fauc-notice-heading{font-weight:700;}</style>';
+		echo '<h3 class="fauc-notice-heading">' . esc_html__( 'このサイトに関する注意事項', 'forced-auto-update-controller' ) . '</h3>';
+		echo '<p>' . esc_html__( 'このサイトは Git などでバージョン管理されていますが、Forced Auto update Controller プラグインにより自動更新が強制的に有効になっています。', 'forced-auto-update-controller' ) . '</p>';
+		echo '<p>' . esc_html__( 'サーバー上のファイルが自動で更新され、Git などバージョン管理との整合が崩れる恐れがありますので、作業着手前にドメインで指定された環境の差分をコミットする、あるいは差分をいったんすべて削除してからデプロイするなど、Git との連携において留意すべき点があることに充分注意してください。', 'forced-auto-update-controller' ) . '</p>';
+
+		// 通知抑止設定の有無にかかわらず、現状を常時可視化する.
+		$this->render_core_update_status();
 
 		// ラップ用の div を閉じる.
 		echo '</div>';
@@ -843,16 +1183,14 @@ class FAUC_Auto_Update_Controller {
 		// メタボックスのコンテンツをラップする div にクラスを追加.
 		echo '<div class="forced-auto-update-warning">';
 
-		// メッセージを出力.
-		// __() 関数を使用して翻訳可能な文字列を取得し、wp_kses_post() で許可された HTML タグのみを許可.
-		echo wp_kses_post(
-			__(
-				'<h3 style="font-weight:700;">このサイトに関する注意事項</h3>
-				<p>このサイトは Git などでバージョン管理されていますが、Forced Auto update Controller プラグインのドメインパターンに合致したサイト（公開環境など）では自動更新が有効になっています。</p>
-				<p>この場合、ドメインパターンに合致したサイトではサーバー上のファイルが自動で更新され、Git などバージョン管理との整合が崩れる恐れがあります。<br>作業着手前にドメインで指定された環境の差分をコミットする、あるいは差分をいったんすべて削除してからデプロイするなど、Git との連携において留意すべき点があることに充分注意してください。</p>',
-				'forced-auto-update-controller'
-			)
-		);
+		// マークアップは PHP 側で組み立て、__() には翻訳対象のテキストのみを渡す.
+		echo '<style>.fauc-notice-heading{font-weight:700;}</style>';
+		echo '<h3 class="fauc-notice-heading">' . esc_html__( 'このサイトに関する注意事項', 'forced-auto-update-controller' ) . '</h3>';
+		echo '<p>' . esc_html__( 'このサイトは Git などでバージョン管理されていますが、Forced Auto update Controller プラグインのドメインパターンに合致したサイト（公開環境など）では自動更新が有効になっています。', 'forced-auto-update-controller' ) . '</p>';
+		echo '<p>' . esc_html__( 'この場合、ドメインパターンに合致したサイトではサーバー上のファイルが自動で更新され、Git などバージョン管理との整合が崩れる恐れがあります。作業着手前にドメインで指定された環境の差分をコミットする、あるいは差分をいったんすべて削除してからデプロイするなど、Git との連携において留意すべき点があることに充分注意してください。', 'forced-auto-update-controller' ) . '</p>';
+
+		// 通知抑止設定の有無にかかわらず、現状を常時可視化する.
+		$this->render_core_update_status();
 
 		// ラップ用の div を閉じる.
 		echo '</div>';
@@ -886,13 +1224,70 @@ class FAUC_Auto_Update_Controller {
 	 * (9-1) コアアップデートがある際に管理画面上部に表示されるバナー "WordPress x.x.x が利用可能です" を削除
 	 * （update_nag は WordPress本体更新用の通知に限るので、プラグイン更新には影響しない）
 	 *
+	 * ネットワーク管理画面では admin_notices ではなく network_admin_notices に
+	 * 同名のフックが登録されているため、両方から取り除く必要がある.
+	 *
 	 * @return void
 	 */
 	public function remove_update_nag_for_core() {
 		if ( $this->should_hide_wp_update_notifications() ) {
 			// update_nag フックを削除する → WPコア向けバナーの削除.
 			remove_action( 'admin_notices', 'update_nag', 3 );
+			remove_action( 'network_admin_notices', 'update_nag', 3 );
 		}
+	}
+
+	/**
+	 * ダッシュボードウィジェットに、現在のコアバージョン・保留中の更新の有無・
+	 * このプラグインによるコア自動更新の有効状況を常時表示する.
+	 *
+	 * 「WordPress本体の更新通知を非表示にする」設定の ON/OFF に関わらず表示することで、
+	 * 通知を消したことで更新の必要性そのものに気づけなくなる事態を防ぐ.
+	 *
+	 * @return void
+	 */
+	private function render_core_update_status() {
+		global $wp_version;
+
+		if ( ! function_exists( 'get_core_updates' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/update.php';
+		}
+
+		$core_updates    = get_core_updates( array( 'dismissed' => false ) );
+		$pending_version = '';
+		if ( ! empty( $core_updates ) && isset( $core_updates[0]->response, $core_updates[0]->version ) && 'upgrade' === $core_updates[0]->response ) {
+			$pending_version = $core_updates[0]->version;
+		}
+
+		$core_auto_update_enabled = $this->is_production_domain();
+
+		echo '<div class="forced-auto-update-core-status" style="margin-top:12px;padding:8px 12px;background:#f0f0f1;border-left:4px solid #2271b1;">';
+
+		printf(
+			'<p style="margin:0 0 4px;"><strong>%s</strong> %s</p>',
+			esc_html__( '現在のコアバージョン:', 'forced-auto-update-controller' ),
+			esc_html( $wp_version )
+		);
+
+		if ( '' !== $pending_version ) {
+			printf(
+				'<p style="margin:0 0 4px;color:#d63638;">%s <strong>%s</strong></p>',
+				esc_html__( '保留中の更新があります:', 'forced-auto-update-controller' ),
+				esc_html( $pending_version )
+			);
+		} else {
+			echo '<p style="margin:0 0 4px;color:#00a32a;">' . esc_html__( '保留中の更新はありません。', 'forced-auto-update-controller' ) . '</p>';
+		}
+
+		printf(
+			'<p style="margin:0;">%s <strong>%s</strong></p>',
+			esc_html__( 'このプラグインによるコア自動更新:', 'forced-auto-update-controller' ),
+			$core_auto_update_enabled
+				? esc_html__( '有効です。', 'forced-auto-update-controller' )
+				: esc_html__( '無効です（ドメインパターン未一致）。', 'forced-auto-update-controller' )
+		);
+
+		echo '</div>';
 	}
 
 	/**
@@ -902,8 +1297,13 @@ class FAUC_Auto_Update_Controller {
 	 */
 	private function should_hide_wp_update_notifications() {
 		// オプションが true (1) なら隠す設定.
-		$hide_wp_updates = get_option( $this->option_name . '_hide_wp_updates', false );
-		return (bool) $hide_wp_updates;
+		if ( ! (bool) get_option( $this->option_name . '_hide_wp_updates', false ) ) {
+			return false;
+		}
+
+		// 自動更新が実際に機能している（ドメインパターンに合致する）環境でのみ通知を抑止する.
+		// 合致しない環境で通知まで消すと、更新もされず気づきようもない「放置状態」を生む.
+		return $this->is_production_domain();
 	}
 
 	/**
@@ -934,6 +1334,143 @@ class FAUC_Auto_Update_Controller {
 			return 'enabled';
 		}
 		return $value;
+	}
+
+	/**
+	 * (12) Site Health の「直接実行」テスト一覧に自プラグインのテストを登録する.
+	 *
+	 * @param array $tests Site Health のテスト一覧です.
+	 * @return array テスト追加後の一覧です.
+	 */
+	public function register_site_health_test( $tests ) {
+		$tests['direct']['fauc_hidden_update_notifications'] = array(
+			'label' => __( 'Forced Auto Update Controller: 更新通知抑止の整合性', 'forced-auto-update-controller' ),
+			'test'  => array( $this, 'run_site_health_test' ),
+		);
+
+		return $tests;
+	}
+
+	/**
+	 * 「WordPress本体の更新通知を非表示にする」がONなのに、コアの自動更新が
+	 * 実際には機能していない（ドメインパターン未設定 or 不一致）状態を検出する.
+	 *
+	 * このプラグインが更新通知を消した結果、更新の必要性に誰も気づけなくなる
+	 * 「放置状態」を Site Health の critical として可視化する.
+	 *
+	 * @return array Site Health テスト結果です.
+	 */
+	public function run_site_health_test() {
+		$result = array(
+			'label'       => __( '更新通知の抑止設定は自動更新の状態と整合しています', 'forced-auto-update-controller' ),
+			'status'      => 'good',
+			'badge'       => array(
+				'label' => __( 'セキュリティ', 'forced-auto-update-controller' ),
+				'color' => 'blue',
+			),
+			'description' => sprintf(
+				'<p>%s</p>',
+				esc_html__( 'Forced Auto Update Controller の「WordPress本体の更新通知を非表示にする」設定は、コア自動更新が実際に有効な環境でのみ機能しています。', 'forced-auto-update-controller' )
+			),
+			'actions'     => '',
+			'test'        => 'fauc_hidden_update_notifications',
+		);
+
+		$hide_wp_updates_enabled = (bool) get_option( $this->option_name . '_hide_wp_updates', false );
+		$core_auto_update_active = $this->is_configured() && $this->is_production_domain();
+
+		if ( $hide_wp_updates_enabled && ! $core_auto_update_active ) {
+			$result['status'] = 'critical';
+			$result['label']  = __( 'WordPress本体の更新通知が非表示なのに、コア自動更新が機能していません', 'forced-auto-update-controller' );
+
+			$result['description'] = sprintf(
+				'<p>%s</p>',
+				esc_html__( 'Forced Auto Update Controller の「WordPress本体の更新通知を非表示にする」がONですが、ドメインパターンが未設定または現在のサイトと一致していないため、コアの自動更新は機能していません。更新の必要性に誰も気づけない状態になっている可能性があります。', 'forced-auto-update-controller' )
+			);
+
+			$result['actions'] = sprintf(
+				'<p><a href="%s">%s</a></p>',
+				esc_url( admin_url( 'options-general.php?page=fauc-forced-auto-update-controller' ) ),
+				esc_html__( '設定画面を開く', 'forced-auto-update-controller' )
+			);
+		}
+
+		return $result;
+	}
+
+	/**
+	 * (13) automatic_updates_complete フックのコールバック.
+	 *
+	 * 本番ドメインで自動更新が実行された場合のみ、成功した更新の一覧を
+	 * transient に保存し、管理画面での通知に利用する.
+	 *
+	 * @param array $update_results WP_Automatic_Updater が実行結果を格納した配列（type別）です.
+	 * @return void
+	 */
+	public function handle_automatic_updates_complete( $update_results ) {
+		if ( ! $this->is_production_domain() || ! is_array( $update_results ) ) {
+			return;
+		}
+
+		$items = array();
+
+		foreach ( $update_results as $type => $results ) {
+			if ( ! is_array( $results ) ) {
+				continue;
+			}
+
+			foreach ( $results as $result ) {
+				if ( empty( $result->result ) || is_wp_error( $result->result ) ) {
+					continue; // 失敗した更新は対象外（実際にファイルが変わったものだけ通知）.
+				}
+
+				$name = isset( $result->name ) ? $result->name : '';
+
+				if ( '' === $name ) {
+					continue;
+				}
+
+				$items[] = sprintf( '%s: %s', $type, $name );
+			}
+		}
+
+		if ( empty( $items ) ) {
+			return;
+		}
+
+		set_transient( $this->option_name . '_last_auto_update_summary', $items, WEEK_IN_SECONDS );
+	}
+
+	/**
+	 * 直近の自動更新実行結果を管理画面に通知する.
+	 *
+	 * デプロイ前にサーバー上の差分をバージョン管理へ取り込み忘れる事故を防ぐ.
+	 *
+	 * @return void
+	 */
+	public function render_last_auto_update_notice() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		$items = get_transient( $this->option_name . '_last_auto_update_summary' );
+
+		if ( empty( $items ) || ! is_array( $items ) ) {
+			return;
+		}
+
+		echo '<div class="notice notice-info">';
+		printf(
+			'<p><strong>%s</strong> %s</p>',
+			esc_html__( 'Forced Auto Update Controller: 自動更新が実行されました。', 'forced-auto-update-controller' ),
+			esc_html__( 'デプロイ前に、サーバー上の差分をバージョン管理側へ取り込んでください。', 'forced-auto-update-controller' )
+		);
+		echo '<ul style="list-style:disc;margin-left:20px;">';
+		foreach ( $items as $item ) {
+			echo '<li>' . esc_html( $item ) . '</li>';
+		}
+		echo '</ul>';
+		echo '</div>';
 	}
 }
 

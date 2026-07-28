@@ -23,3 +23,7 @@ delete_option( 'FAUC_forced_auto_update_domain_excluded_plugins' );
 delete_option( 'FAUC_forced_auto_update_domain_excluded_themes' );
 // WordPress本体の更新通知を非表示にする設定.
 delete_option( 'FAUC_forced_auto_update_domain_hide_wp_updates' );
+// 非本番環境でもコアのマイナー/セキュリティ自動更新を許可する設定.
+delete_option( 'FAUC_forced_auto_update_domain_allow_core_minor_everywhere' );
+// 直近の自動更新実行結果の通知用データ.
+delete_transient( 'FAUC_forced_auto_update_domain_last_auto_update_summary' );
