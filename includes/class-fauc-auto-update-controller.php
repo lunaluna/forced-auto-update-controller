@@ -97,6 +97,14 @@ class FAUC_Auto_Update_Controller {
 		 */
 		add_filter( 'pre_site_option_auto_update_core_minor', array( $this, 'force_core_minor_option' ), 9999 );
 		add_filter( 'pre_option_auto_update_core_minor', array( $this, 'force_core_minor_option' ), 9999 );
+
+		/**
+		 * (12) Site Health に「更新通知抑止とコア自動更新の整合性」テストを追加.
+		 *
+		 * 「WordPress本体の更新通知を非表示にする」がONなのにコア自動更新が実際には
+		 * 機能していない状態（放置状態）を critical として検出する.
+		 */
+		add_filter( 'site_status_tests', array( $this, 'register_site_health_test' ) );
 	}
 
 	/**
@@ -1123,6 +1131,68 @@ class FAUC_Auto_Update_Controller {
 			return 'enabled';
 		}
 		return $value;
+	}
+
+	/**
+	 * (12) Site Health の「直接実行」テスト一覧に自プラグインのテストを登録する.
+	 *
+	 * @param array $tests Site Health のテスト一覧です.
+	 * @return array テスト追加後の一覧です.
+	 */
+	public function register_site_health_test( $tests ) {
+		$tests['direct']['fauc_hidden_update_notifications'] = array(
+			'label' => __( 'Forced Auto Update Controller: 更新通知抑止の整合性', 'forced-auto-update-controller' ),
+			'test'  => array( $this, 'run_site_health_test' ),
+		);
+
+		return $tests;
+	}
+
+	/**
+	 * 「WordPress本体の更新通知を非表示にする」がONなのに、コアの自動更新が
+	 * 実際には機能していない（ドメインパターン未設定 or 不一致）状態を検出する.
+	 *
+	 * このプラグインが更新通知を消した結果、更新の必要性に誰も気づけなくなる
+	 * 「放置状態」を Site Health の critical として可視化する.
+	 *
+	 * @return array Site Health テスト結果です.
+	 */
+	public function run_site_health_test() {
+		$result = array(
+			'label'       => __( '更新通知の抑止設定は自動更新の状態と整合しています', 'forced-auto-update-controller' ),
+			'status'      => 'good',
+			'badge'       => array(
+				'label' => __( 'セキュリティ', 'forced-auto-update-controller' ),
+				'color' => 'blue',
+			),
+			'description' => sprintf(
+				'<p>%s</p>',
+				esc_html__( 'Forced Auto Update Controller の「WordPress本体の更新通知を非表示にする」設定は、コア自動更新が実際に有効な環境でのみ機能しています。', 'forced-auto-update-controller' )
+			),
+			'actions'     => '',
+			'test'        => 'fauc_hidden_update_notifications',
+		);
+
+		$hide_wp_updates_enabled = (bool) get_option( $this->option_name . '_hide_wp_updates', false );
+		$core_auto_update_active = $this->is_configured() && $this->is_production_domain();
+
+		if ( $hide_wp_updates_enabled && ! $core_auto_update_active ) {
+			$result['status'] = 'critical';
+			$result['label']  = __( 'WordPress本体の更新通知が非表示なのに、コア自動更新が機能していません', 'forced-auto-update-controller' );
+
+			$result['description'] = sprintf(
+				'<p>%s</p>',
+				esc_html__( 'Forced Auto Update Controller の「WordPress本体の更新通知を非表示にする」がONですが、ドメインパターンが未設定または現在のサイトと一致していないため、コアの自動更新は機能していません。更新の必要性に誰も気づけない状態になっている可能性があります。', 'forced-auto-update-controller' )
+			);
+
+			$result['actions'] = sprintf(
+				'<p><a href="%s">%s</a></p>',
+				esc_url( admin_url( 'options-general.php?page=fauc-forced-auto-update-controller' ) ),
+				esc_html__( '設定画面を開く', 'forced-auto-update-controller' )
+			);
+		}
+
+		return $result;
 	}
 }
 
