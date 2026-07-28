@@ -14,6 +14,7 @@
  * License:           GPLv2 or later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain:       forced-auto-update-controller
+ * Domain Path:       /languages
  *
  * @package ForcedAutoUpdateController
  */
@@ -21,6 +22,22 @@
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; // セキュリティ: 直接アクセスを防止.
 }
+
+/**
+ * 翻訳ファイル (.mo) を読み込む.
+ *
+ * GitHub 配布で wp.org 未登録のため、翻訳の自動読み込みに頼らず明示的に読み込む.
+ *
+ * @return void
+ */
+function fauc_load_textdomain() {
+	load_plugin_textdomain(
+		'forced-auto-update-controller',
+		false,
+		dirname( plugin_basename( __FILE__ ) ) . '/languages'
+	);
+}
+add_action( 'init', 'fauc_load_textdomain' );
 
 /**
  * プラグイン有効化時の環境チェック (PHP 7.4+, WP 6.0+).

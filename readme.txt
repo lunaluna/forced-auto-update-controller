@@ -1,5 +1,6 @@
 === Forced Auto Update Controller ===
-Tags: update
+Contributors: lunaluna_dev
+Tags: update, auto-update, automatic updates, git, version control
 Requires at least: 6.0
 Tested up to: 7.0.2
 Stable tag: 1.6.3
@@ -8,6 +9,21 @@ License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
 Forced Auto update Controller is a plugin that allows you to enable automatic updates only when they match the specified domain pattern, even under version control systems such as Git and SVN.
+
+== Description ==
+
+Sites managed under version control (Git, SVN, etc.) usually disable
+WordPress's automatic updates, because core intentionally skips them for
+VCS checkouts. That protects your deployed codebase, but it also means
+security patches for core, plugins, and themes silently stop applying.
+
+Forced Auto Update Controller lets you specify one or more production
+domain patterns. When the current site matches, the plugin overrides the
+VCS check so automatic updates function as WordPress intends — while
+leaving every other environment (local, staging, etc.) untouched. You can
+also exclude specific plugins or themes from automatic updates, and
+optionally hide the WordPress core update notification once auto-updates
+are confirmed to be working.
 
 == Installation ==
 1. Upload the `forced-auto-update-controller` folder to the `/wp-content/plugins/` directory.
