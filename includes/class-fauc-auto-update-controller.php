@@ -32,6 +32,13 @@ class FAUC_Auto_Update_Controller {
 	private $option_name = 'FAUC_forced_auto_update_domain';
 
 	/**
+	 * is_production_domain() の結果のメモ化キャッシュ（未計算時は null）.
+	 *
+	 * @var bool|null
+	 */
+	private $is_production_domain_cache = null;
+
+	/**
 	 * コンストラクタ
 	 *
 	 * - フィルターフック・アクションフックの登録を行う
@@ -347,22 +354,22 @@ class FAUC_Auto_Update_Controller {
 	 */
 	public function domain_field_callback() {
 		$overridden_by_constant = $this->is_domain_overridden_by_constant();
-		$value                  = $overridden_by_constant ? FAUC_PRODUCTION_DOMAIN : get_option( $this->option_name );
+		$value                  = $overridden_by_constant ? (string) FAUC_PRODUCTION_DOMAIN : (string) get_option( $this->option_name, '' );
 
-		echo '<p>' . esc_html__( 'ここに有効化したいサイトのドメインを入力します。サブディレクトリで公開している場合はサブディレクトリも含めてください。「https://」や最後の「/」は不要です。', 'forced-auto-update-controller' ) . '</p>';
+		echo '<p>' . esc_html__( 'ここに有効化したいサイトのドメインを入力します。複数の本番ドメイン（www の有無や複数系統の運用など）がある場合は1行に1つずつ入力してください。サブディレクトリで公開している場合はサブディレクトリも含めてください。「https://」や最後の「/」は不要です。', 'forced-auto-update-controller' ) . '</p>';
 
 		if ( $overridden_by_constant ) {
 			printf(
-				'<input type="text" value="%1$s" class="regular-text" readonly disabled />',
-				esc_attr( $value )
+				'<textarea class="large-text code" rows="3" readonly disabled>%s</textarea>',
+				esc_textarea( $value )
 			);
 			echo '<p class="description">' . esc_html__( 'FAUC_PRODUCTION_DOMAIN 定数で固定されているため、この設定は無効です（定数の値が優先されます）。', 'forced-auto-update-controller' ) . '</p>';
 		} else {
 			printf(
-				'<input type="text" name="%1$s" value="%2$s" class="regular-text" placeholder="%3$s" />',
+				'<textarea name="%1$s" class="large-text code" rows="3" placeholder="%2$s">%3$s</textarea>',
 				esc_attr( $this->option_name ),
-				esc_attr( $value ),
-				esc_attr__( '例: example.com、example.com/sample など', 'forced-auto-update-controller' )
+				esc_attr__( "example.com\nexample.com/sample", 'forced-auto-update-controller' ),
+				esc_textarea( $value )
 			);
 		}
 
@@ -381,6 +388,14 @@ class FAUC_Auto_Update_Controller {
 			}
 		}
 
+		$patterns = array();
+		foreach ( preg_split( '/\r\n|\r|\n/', $value ) as $line ) {
+			$line = trim( $line );
+			if ( '' !== $line ) {
+				$patterns[] = strtolower( $line );
+			}
+		}
+
 		echo '<div style="margin-top:8px;padding:8px 12px;background:#f0f0f1;border-left:4px solid #2271b1;">';
 		printf(
 			'<p style="margin:0 0 4px;"><strong>%s</strong> <code>%s</code></p>',
@@ -388,8 +403,8 @@ class FAUC_Auto_Update_Controller {
 			esc_html( $detected )
 		);
 
-		if ( ! empty( $value ) && '' !== $detected ) {
-			if ( strtolower( $detected ) === strtolower( $value ) ) {
+		if ( ! empty( $patterns ) && '' !== $detected ) {
+			if ( in_array( strtolower( $detected ), $patterns, true ) ) {
 				printf(
 					'<p style="margin:0;color:#00a32a;">&#10003; %s</p>',
 					esc_html__( '保存済みパターンと一致しています。プラグインの自動更新制御は有効です。', 'forced-auto-update-controller' )
@@ -402,12 +417,12 @@ class FAUC_Auto_Update_Controller {
 				printf(
 					'<p style="margin:4px 0 0;color:#50575e;font-size:12px;">%s <code>%s</code> / %s <code>%s</code></p>',
 					esc_html__( '保存値:', 'forced-auto-update-controller' ),
-					esc_html( $value ),
+					esc_html( implode( ', ', $patterns ) ),
 					esc_html__( '検出値:', 'forced-auto-update-controller' ),
 					esc_html( strtolower( $detected ) )
 				);
 			}
-		} elseif ( empty( $value ) ) {
+		} elseif ( empty( $patterns ) ) {
 			printf(
 				'<p style="margin:0;color:#dba617;">&#9888; %s</p>',
 				esc_html__( 'ドメインパターンが未設定です。上記の検出値を参考に入力してください。', 'forced-auto-update-controller' )
@@ -518,42 +533,66 @@ class FAUC_Auto_Update_Controller {
 	/**
 	 * ドメインパターンのサニタイズおよびバリデーションコールバック.
 	 *
-	 * @param string $input ユーザー入力値です.
-	 * @return string サニタイズおよびバリデーション後の値です.
+	 * このコールバックは sanitize_option_{$option} フィルタ経由で update_option() からも
+	 * 呼ばれうるため、$input には null が渡る可能性がある
+	 * （PHP 8.1+ では非文字列を trim() に渡すと deprecation になる）.
+	 * 1行に1つずつドメインパターンを入力することで、複数の本番ドメイン
+	 * （www有無、複数系統の運用など）に対応できるようにする.
+	 *
+	 * @param mixed $input ユーザー入力値です.
+	 * @return string サニタイズおよびバリデーション後の値です（複数行の場合は改行区切り）.
 	 */
 	public function sanitize_domain_pattern( $input ) {
-		// トリムして空白を削除.
-		$pattern = trim( $input );
+		$input = (string) $input;
 
-		// 先頭の 'https://' または 'http://' を削除.
-		$pattern = preg_replace( '#^https?://#i', '', $pattern );
+		$valid_patterns = array();
 
-		// 末尾の '/' を削除.
-		$pattern = rtrim( $pattern, '/' );
+		foreach ( preg_split( '/\r\n|\r|\n/', $input ) as $line ) {
+			$pattern = trim( $line );
 
-		// パターンが空になったら設定エラーを追加し、空文字列を返す.
-		if ( empty( $pattern ) ) {
+			if ( '' === $pattern ) {
+				continue;
+			}
+
+			// 先頭の 'https://' または 'http://' を削除.
+			$pattern = preg_replace( '#^https?://#i', '', $pattern );
+
+			// 末尾の '/' を削除.
+			$pattern = rtrim( $pattern, '/' );
+
+			if ( '' === $pattern ) {
+				continue;
+			}
+
+			// ドメイン（punycode TLD可・ポート番号可）＋任意の深さのパスを検証.
+			if ( ! preg_match( '/^[a-z0-9.-]+\.[a-z0-9-]{2,}(:[0-9]+)?(\/[a-z0-9_.~-]+)*$/i', $pattern ) ) {
+				add_settings_error(
+					'fauc-forced-auto-update-controller-notices',
+					'FAUC_invalid_domain_pattern_format',
+					sprintf(
+						/* translators: %s: 無効な入力行です. */
+						__( 'ドメインパターンの形式が正しくありません: 「%s」。例: example.com、example.com/sample など', 'forced-auto-update-controller' ),
+						$pattern
+					),
+					'error'
+				);
+				continue;
+			}
+
+			$valid_patterns[] = strtolower( $pattern );
+		}
+
+		if ( empty( $valid_patterns ) ) {
 			add_settings_error(
 				'fauc-forced-auto-update-controller-notices',
 				'FAUC_invalid_domain_pattern',
-				__( 'ドメインパターンが無効です。正しい形式で入力してください。', 'forced-auto-update-controller' ),
+				__( 'ドメインパターンが無効です。1行に1つずつ、正しい形式で入力してください。', 'forced-auto-update-controller' ),
 				'error'
 			);
 			return '';
 		}
 
-		// ドメイン（ポート番号可）＋任意の深さのパスを検証.
-		if ( ! preg_match( '/^[a-z0-9.-]+\.[a-z]{2,}(:[0-9]+)?(\/[a-z0-9_.~-]+)*$/i', $pattern ) ) {
-			add_settings_error(
-				'fauc-forced-auto-update-controller-notices',
-				'FAUC_invalid_domain_pattern_format',
-				__( 'ドメインパターンの形式が正しくありません。例: example.com、example.com/sample など', 'forced-auto-update-controller' ),
-				'error'
-			);
-			return '';
-		}
-
-		return strtolower( $pattern );
+		return implode( "\n", array_values( array_unique( $valid_patterns ) ) );
 	}
 
 	/**
@@ -618,7 +657,7 @@ class FAUC_Auto_Update_Controller {
 	}
 
 	/**
-	 * 実際に判定に使うドメインパターンを取得する.
+	 * 実際に判定に使うドメインパターン（生の文字列。複数行の場合あり）を取得する.
 	 *
 	 * FAUC_PRODUCTION_DOMAIN 定数が定義されていればそちらを優先し、
 	 * なければ DB に保存された設定値を使う.
@@ -634,26 +673,60 @@ class FAUC_Auto_Update_Controller {
 	}
 
 	/**
-	 * 現在の環境がパターンに一致するか（本番環境か）どうかを判定.
+	 * ドメインパターンを改行区切りで複数指定できるようにするため、
+	 * 空行を除いた個々のパターンの配列に分解する.
+	 *
+	 * 本番環境が複数系統（例: www有無、複数ドメインでの提供）ある運用に対応するため.
+	 *
+	 * @return string[] 個々のドメインパターン（トリム済み・空行除外）です.
+	 */
+	private function get_domain_patterns() {
+		$raw = $this->get_domain_pattern();
+
+		if ( '' === trim( $raw ) ) {
+			return array();
+		}
+
+		$patterns = array();
+
+		foreach ( preg_split( '/\r\n|\r|\n/', $raw ) as $line ) {
+			$line = trim( (string) $line );
+
+			if ( '' !== $line ) {
+				$patterns[] = $line;
+			}
+		}
+
+		return $patterns;
+	}
+
+	/**
+	 * 現在の環境がいずれかのパターンに一致するか（本番環境か）どうかを判定.
+	 *
+	 * 判定結果はリクエスト中に何度も呼ばれる（プラグイン数分ループするフィルタも
+	 * 含む）ため、インスタンスプロパティにメモ化して都度の get_option / preg_match を避ける.
 	 *
 	 * @return bool true: 一致（本番） / false: 不一致（非本番）です.
 	 */
 	private function is_production_domain() {
-		$pattern = $this->get_domain_pattern();
-
-		if ( empty( $pattern ) ) {
-			return false;
+		if ( null !== $this->is_production_domain_cache ) {
+			return $this->is_production_domain_cache;
 		}
 
-		$pattern = preg_replace( '#^https?://#i', '', $pattern );
-		$pattern = rtrim( $pattern, '/' );
+		$this->is_production_domain_cache = $this->compute_is_production_domain();
 
-		if ( empty( $pattern ) ) {
-			return false;
-		}
+		return $this->is_production_domain_cache;
+	}
 
-		// ドメイン（ポート番号可）＋任意の深さのパスを許容.
-		if ( ! preg_match( '/^[a-z0-9.-]+\.[a-z]{2,}(:[0-9]+)?(\/[a-z0-9_.~-]+)*$/i', $pattern ) ) {
+	/**
+	 * is_production_domain() の実処理（メモ化なし）.
+	 *
+	 * @return bool
+	 */
+	private function compute_is_production_domain() {
+		$patterns = $this->get_domain_patterns();
+
+		if ( empty( $patterns ) ) {
 			return false;
 		}
 
@@ -690,18 +763,37 @@ class FAUC_Auto_Update_Controller {
 			$host_with_path .= '/' . $path;
 		}
 
-		// 小文字に正規化して比較.
-		$result = ( strtolower( $host_with_path ) === strtolower( $pattern ) );
+		$result = false;
+
+		foreach ( $patterns as $pattern ) {
+			$pattern = preg_replace( '#^https?://#i', '', $pattern );
+			$pattern = rtrim( $pattern, '/' );
+
+			if ( '' === $pattern ) {
+				continue;
+			}
+
+			// ドメイン（punycode TLD可・ポート番号可）＋任意の深さのパスを許容.
+			if ( ! preg_match( '/^[a-z0-9.-]+\.[a-z0-9-]{2,}(:[0-9]+)?(\/[a-z0-9_.~-]+)*$/i', $pattern ) ) {
+				continue;
+			}
+
+			// 小文字に正規化して比較.
+			if ( strtolower( $host_with_path ) === strtolower( $pattern ) ) {
+				$result = true;
+				break;
+			}
+		}
 
 		/**
 		 * 本番ドメイン判定の最終結果をフィルタする.
 		 *
 		 * 緊急停止など、コードレベルで最終的に判定結果を上書きしたい場合に利用する.
 		 *
-		 * @param bool   $result  判定結果です.
-		 * @param string $pattern 判定に使用したドメインパターンです.
+		 * @param bool     $result   判定結果です.
+		 * @param string[] $patterns 判定に使用したドメインパターンの配列です.
 		 */
-		return (bool) apply_filters( 'fauc_is_production_domain', $result, $pattern );
+		return (bool) apply_filters( 'fauc_is_production_domain', $result, $patterns );
 	}
 
 	/**
@@ -714,7 +806,7 @@ class FAUC_Auto_Update_Controller {
 	 * @return bool 設定済みなら true.
 	 */
 	private function is_configured() {
-		return '' !== trim( $this->get_domain_pattern() );
+		return array() !== $this->get_domain_patterns();
 	}
 
 	/**
