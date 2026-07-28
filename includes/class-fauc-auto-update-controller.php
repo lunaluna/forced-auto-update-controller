@@ -112,6 +112,16 @@ class FAUC_Auto_Update_Controller {
 		 * 機能していない状態（放置状態）を critical として検出する.
 		 */
 		add_filter( 'site_status_tests', array( $this, 'register_site_health_test' ) );
+
+		/**
+		 * (13) 自動更新が実行されたことを管理者へ通知する.
+		 *
+		 * Git などバージョン管理下のサーバーでファイルが自動更新されると、
+		 * 次回デプロイ時に差分の巻き戻しが起きうる（M-4）。実行結果を記録し、
+		 * 管理画面に通知することでデプロイ前に気づけるようにする.
+		 */
+		add_action( 'automatic_updates_complete', array( $this, 'handle_automatic_updates_complete' ) );
+		add_action( 'admin_notices', array( $this, 'render_last_auto_update_notice' ) );
 	}
 
 	/**
@@ -1267,6 +1277,81 @@ class FAUC_Auto_Update_Controller {
 		}
 
 		return $result;
+	}
+
+	/**
+	 * (13) automatic_updates_complete フックのコールバック.
+	 *
+	 * 本番ドメインで自動更新が実行された場合のみ、成功した更新の一覧を
+	 * transient に保存し、管理画面での通知に利用する.
+	 *
+	 * @param array $update_results WP_Automatic_Updater が実行結果を格納した配列（type別）です.
+	 * @return void
+	 */
+	public function handle_automatic_updates_complete( $update_results ) {
+		if ( ! $this->is_production_domain() || ! is_array( $update_results ) ) {
+			return;
+		}
+
+		$items = array();
+
+		foreach ( $update_results as $type => $results ) {
+			if ( ! is_array( $results ) ) {
+				continue;
+			}
+
+			foreach ( $results as $result ) {
+				if ( empty( $result->result ) || is_wp_error( $result->result ) ) {
+					continue; // 失敗した更新は対象外（実際にファイルが変わったものだけ通知）.
+				}
+
+				$name = isset( $result->name ) ? $result->name : '';
+
+				if ( '' === $name ) {
+					continue;
+				}
+
+				$items[] = sprintf( '%s: %s', $type, $name );
+			}
+		}
+
+		if ( empty( $items ) ) {
+			return;
+		}
+
+		set_transient( $this->option_name . '_last_auto_update_summary', $items, WEEK_IN_SECONDS );
+	}
+
+	/**
+	 * 直近の自動更新実行結果を管理画面に通知する.
+	 *
+	 * デプロイ前にサーバー上の差分をバージョン管理へ取り込み忘れる事故を防ぐ.
+	 *
+	 * @return void
+	 */
+	public function render_last_auto_update_notice() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		$items = get_transient( $this->option_name . '_last_auto_update_summary' );
+
+		if ( empty( $items ) || ! is_array( $items ) ) {
+			return;
+		}
+
+		echo '<div class="notice notice-info">';
+		printf(
+			'<p><strong>%s</strong> %s</p>',
+			esc_html__( 'Forced Auto Update Controller: 自動更新が実行されました。', 'forced-auto-update-controller' ),
+			esc_html__( 'デプロイ前に、サーバー上の差分をバージョン管理側へ取り込んでください。', 'forced-auto-update-controller' )
+		);
+		echo '<ul style="list-style:disc;margin-left:20px;">';
+		foreach ( $items as $item ) {
+			echo '<li>' . esc_html( $item ) . '</li>';
+		}
+		echo '</ul>';
+		echo '</div>';
 	}
 }
 
