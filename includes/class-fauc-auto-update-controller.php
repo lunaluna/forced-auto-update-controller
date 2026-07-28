@@ -3,9 +3,11 @@
  * FAUC_Auto_Update_Controller クラスファイル.
  *
  * ドメインパターンを指定し、パターンが一致したら
- *   - コア/プラグイン/テーマ/翻訳ファイルの自動更新を強制的に有効化
+ *   - コア/翻訳ファイルの自動更新を強制的に有効化
+ *   - プラグイン/テーマは、個別トグル（auto_update_plugins/themes）の設定を尊重して
+ *     Git などのバージョン管理下でも自動更新が機能するようにする
  *   - プラグイン/テーマ一覧に自動更新トグルUI (WP5.5+) を表示
- *   - ただし、チェックが入っているプラグイン・テーマは自動更新を除外
+ *   - ただし、チェックが入っているプラグイン・テーマは自動更新を強制除外
  * それ以外の環境では自動更新を無効化し、UI も非表示にする
  * 優先度 9999 を指定して最終的に上書き
  * さらにオプションとして「WordPress本体のアップデート通知」を非表示にする機能を追加
@@ -303,7 +305,7 @@ class FAUC_Auto_Update_Controller {
 	public function settings_section_callback() {
 		echo '<p>';
 		echo esc_html__(
-			'指定したドメインに合致した場合は自動アップデートを強制的に有効化します。ただし、下記のチェックリストで除外したプラグイン・テーマは自動更新されません。',
+			'指定したドメインに合致した場合、Git などのバージョン管理下でも各プラグイン・テーマの個別の自動更新設定が有効に機能するようになります。下記のチェックリストで除外したプラグイン・テーマは、個別設定の状態にかかわらず自動更新されません。',
 			'forced-auto-update-controller'
 		);
 		echo '</p>';
@@ -856,15 +858,22 @@ class FAUC_Auto_Update_Controller {
 			return $update;
 		}
 
-		// 「除外リスト」に含まれていれば false を返す.
+		// 「除外リスト」に含まれていれば強制的に自動更新から除外する.
 		$excluded_plugins = get_option( $this->option_name . '_excluded_plugins', array() );
 
 		if ( isset( $item->plugin ) && in_array( $item->plugin, $excluded_plugins, true ) ) {
 			return false; // チェック済み → 自動更新除外.
 		}
 
-		// それ以外の場合、ドメインパターンと合致するなら自動更新許可、合致しないなら拒否.
-		return $this->is_production_domain();
+		if ( ! $this->is_production_domain() ) {
+			return false;
+		}
+
+		// 除外リストに含まれないプラグインは、プラグイン一覧の個別トグル
+		// （auto_update_plugins オプション）に基づく $update をそのまま尊重する。
+		// 一律 true にすると、個別に無効化したはずが実際には更新され続ける
+		// 誤った安心（false sense of security）を生むため.
+		return $update;
 	}
 
 	/**
@@ -886,7 +895,13 @@ class FAUC_Auto_Update_Controller {
 			return false; // 除外.
 		}
 
-		return $this->is_production_domain();
+		if ( ! $this->is_production_domain() ) {
+			return false;
+		}
+
+		// 除外リストに含まれないテーマは、テーマ一覧の個別トグル
+		// （auto_update_themes オプション）に基づく $update をそのまま尊重する.
+		return $update;
 	}
 
 	/**
