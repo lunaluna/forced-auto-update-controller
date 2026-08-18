@@ -3,7 +3,7 @@ Contributors: lunaluna_dev
 Tags: update, auto-update, automatic updates, git, version control
 Requires at least: 6.0
 Tested up to: 7.1
-Stable tag: 1.7.0
+Stable tag: 1.8.0
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -28,6 +28,7 @@ are confirmed to be working.
 == Installation ==
 1. Upload the `forced-auto-update-controller` folder to the `/wp-content/plugins/` directory.
 2. Activate the plugin through the \'Plugins\' menu in WordPress.
+3. This plugin is not listed on WordPress.org. As of 1.8.0, it can be updated directly from the Plugins screen like any other plugin: WordPress checks GitHub Releases for new versions and installs them with the usual one-click "Update Now" flow, and the per-plugin "Enable auto-updates" toggle also works.
 
 == Frequently Asked Questions ==
 
@@ -41,6 +42,13 @@ therefore affect the entire network in unintended ways. Use at your own
 risk in a Multisite environment.
 
 == Changelog ==
+
+= 1.8.0 =
+* Added: a GitHub Releases-based self-update mechanism (`FAUC_GitHub_Updater`) so this plugin, which is not registered on WordPress.org, can now be updated from the admin screen like any other plugin.
+* Added: the per-plugin "Enable auto-updates" toggle now works for this plugin, using WordPress's `no_update`/`response` transient registration.
+* Security: version comparison uses WordPress's own detected installed version (`$transient->checked`) rather than a hardcoded constant, so a drifted constant cannot cause update notices to silently stick or disappear.
+* Security: update packages are only accepted from a named `.zip` asset attached to the GitHub Release; there is no fallback to GitHub's auto-generated source archive, so a missing asset fails closed instead of installing a mismatched directory layout.
+* Added: PHPUnit is now part of the test suite (pure-function coverage for the update mechanism), and CI verifies that the tag, plugin header, `FAUC_VERSION` constant, and readme `Stable tag` all agree before a release is published.
 
 = 1.7.0 =
 * Security: added the `Update URI: false` plugin header to prevent supply-chain hijack via unregistered wp.org slug collision (see CVE-2021-44223 class of issue).

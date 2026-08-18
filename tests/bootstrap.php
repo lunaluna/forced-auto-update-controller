@@ -9,7 +9,7 @@
  */
 
 define( 'ABSPATH', __DIR__ . '/' );
-define( 'FAUC_VERSION', '1.7.0' );
+define( 'FAUC_VERSION', '1.8.0' );
 define( 'FAUC_PLUGIN_FILE', dirname( __DIR__ ) . '/forced-auto-update-controller.php' );
 define( 'FAUC_PLUGIN_BASENAME', 'forced-auto-update-controller/forced-auto-update-controller.php' );
 
