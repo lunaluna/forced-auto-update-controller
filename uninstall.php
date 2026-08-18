@@ -27,3 +27,5 @@ delete_option( 'FAUC_forced_auto_update_domain_hide_wp_updates' );
 delete_option( 'FAUC_forced_auto_update_domain_allow_core_minor_everywhere' );
 // 直近の自動更新実行結果の通知用データ.
 delete_transient( 'FAUC_forced_auto_update_domain_last_auto_update_summary' );
+// GitHub Releases 更新機構のリリース情報キャッシュ.
+delete_site_transient( 'FAUC_github_release_cache' );

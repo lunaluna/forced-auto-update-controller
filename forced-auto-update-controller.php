@@ -3,7 +3,7 @@
  * Plugin Name:       Forced Auto Update Controller
  * Plugin URI:        https://github.com/lunaluna/forced-auto-update-controller
  * Description:       Git などファイルのバージョン管理下でも、指定したドメインパターンに合致した場合だけは自動更新を有効化するプラグイン.
- * Version:           1.7.0
+ * Version:           1.8.0
  * Requires at least: 6.0
  * Tested up to:      7.1
  * Requires PHP:      7.4
@@ -21,6 +21,10 @@
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; // セキュリティ: 直接アクセスを防止.
 }
+
+define( 'FAUC_VERSION', '1.8.0' );
+define( 'FAUC_PLUGIN_FILE', __FILE__ );
+define( 'FAUC_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
 
 /**
  * 翻訳ファイル (.mo) を読み込む.
@@ -48,6 +52,11 @@ register_activation_hook( __FILE__, 'fauc_check_environment' );
  * メインクラスの読み込み.
  */
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-fauc-auto-update-controller.php';
+
+/**
+ * GitHub Releases ベースの自己更新機構の読み込み.
+ */
+require_once plugin_dir_path( __FILE__ ) . 'includes/class-fauc-github-updater.php';
 
 /**
  * プラグイン一覧のメタ情報欄に GitHub へのリンクを追加する関数.
