@@ -22,6 +22,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit; // セキュリティ: 直接アクセスを防止.
 }
 
+define( 'FAUC_VERSION', '1.7.0' );
+define( 'FAUC_PLUGIN_FILE', __FILE__ );
+define( 'FAUC_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
+
 /**
  * 翻訳ファイル (.mo) を読み込む.
  *
