@@ -1,2 +1,4 @@
 /vendor/
 .DS_Store
+/forced-auto-update-controller.*.zip
+/.phpunit.result.cache
