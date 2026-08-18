@@ -54,6 +54,11 @@ register_activation_hook( __FILE__, 'fauc_check_environment' );
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-fauc-auto-update-controller.php';
 
 /**
+ * GitHub Releases ベースの自己更新機構の読み込み.
+ */
+require_once plugin_dir_path( __FILE__ ) . 'includes/class-fauc-github-updater.php';
+
+/**
  * プラグイン一覧のメタ情報欄に GitHub へのリンクを追加する関数.
  *
  * - plugin_row_meta フィルタを使い、プラグインの行にカスタムリンクを追加.
