@@ -68,6 +68,24 @@ jobs:
       - name: Run PHPStan
         run: vendor/bin/phpstan analyse --no-progress
 
+  phpunit:
+    name: PHPUnit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          coverage: none
+
+      - name: Install Composer dependencies
+        uses: ramsey/composer-install@v3
+
+      - name: Run PHPUnit
+        run: vendor/bin/phpunit
+
   plugin-check:
     name: Plugin Check
     runs-on: ubuntu-latest
@@ -79,9 +97,10 @@ jobs:
         with:
           build-dir: '.'
           # 開発用ファイル（配布物には含まれない）は検査対象から除外する.
-          exclude-directories: '.github,vendor'
-          exclude-files: '.editorconfig,.gitignore,composer.json,composer.lock,phpcs.xml.dist,phpstan.neon.dist'
-          # Update URI: false はこのプラグインが wp.org 未登録であることを前提に
-          # サブスクワッティング型サプライチェーン攻撃（CVE-2021-44223 系）を防ぐ
-          # 意図的な対策（H-1）であり、既知の false positive として無視する.
+          exclude-directories: '.github,vendor,tests,bin'
+          exclude-files: '.editorconfig,.gitignore,.distignore,composer.json,composer.lock,phpcs.xml.dist,phpstan.neon.dist,phpunit.xml.dist'
+          # Update URI: false を維持したまま GitHub Releases から自己更新する
+          # 意図的な実装（1.8.0〜）であり、wp.org 未登録スラッグの乗っ取り防止
+          # （H-1、サブスクワッティング型サプライチェーン攻撃対策）は引き続き有効。
+          # 既知の false positive として無視する.
           ignore-codes: 'plugin_updater_detected'
