@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   release:
-    uses: lunaluna/l2d-wp-github-update-lib/.github/workflows/plugin-release.yml@v1.0.1
+    uses: lunaluna/l2d-wp-github-update-lib/.github/workflows/plugin-release.yml@v1.0.2
     with:
       slug: forced-auto-update-controller
       version_files: |
