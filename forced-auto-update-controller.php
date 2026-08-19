@@ -22,10 +22,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit; // セキュリティ: 直接アクセスを防止.
 }
 
-define( 'FAUC_VERSION', '1.8.0' );
-define( 'FAUC_PLUGIN_FILE', __FILE__ );
-define( 'FAUC_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
-
 /**
  * 翻訳ファイル (.mo) を読み込む.
  *
@@ -54,9 +50,17 @@ register_activation_hook( __FILE__, 'fauc_check_environment' );
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-fauc-auto-update-controller.php';
 
 /**
- * GitHub Releases ベースの自己更新機構の読み込み.
+ * GitHub Releases ベースの自己更新機構の読み込み(l2d-wp-github-update-lib).
  */
-require_once plugin_dir_path( __FILE__ ) . 'includes/class-fauc-github-updater.php';
+$l2dwpghul_updater_register = require plugin_dir_path( __FILE__ ) . 'lib/l2d-updater/loader.php';
+$l2dwpghul_updater_register(
+	array(
+		'plugin_file'   => __FILE__,
+		'github_repo'   => 'lunaluna/forced-auto-update-controller',
+		'cache_key'     => 'FAUC_github_release_cache',
+		'filter_prefix' => 'fauc',
+	)
+);
 
 /**
  * プラグイン一覧のメタ情報欄に GitHub へのリンクを追加する関数.

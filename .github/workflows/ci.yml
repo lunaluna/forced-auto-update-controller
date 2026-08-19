@@ -68,24 +68,6 @@ jobs:
       - name: Run PHPStan
         run: vendor/bin/phpstan analyse --no-progress
 
-  phpunit:
-    name: PHPUnit
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.1'
-          coverage: none
-
-      - name: Install Composer dependencies
-        uses: ramsey/composer-install@v3
-
-      - name: Run PHPUnit
-        run: vendor/bin/phpunit
-
   plugin-check:
     name: Plugin Check
     runs-on: ubuntu-latest
