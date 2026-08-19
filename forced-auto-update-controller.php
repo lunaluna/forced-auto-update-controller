@@ -3,7 +3,7 @@
  * Plugin Name:       Forced Auto Update Controller
  * Plugin URI:        https://github.com/lunaluna/forced-auto-update-controller
  * Description:       Git などファイルのバージョン管理下でも、指定したドメインパターンに合致した場合だけは自動更新を有効化するプラグイン.
- * Version:           1.8.0
+ * Version:           1.9.0
  * Requires at least: 6.0
  * Tested up to:      7.1
  * Requires PHP:      7.4
