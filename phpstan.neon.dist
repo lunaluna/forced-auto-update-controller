@@ -11,15 +11,6 @@ parameters:
 		# FAUC_PRODUCTION_DOMAIN はサイト側の wp-config.php 等で任意に定義される
 		# オプション定数のため、静的解析からは検出できない.
 		- '#^Constant FAUC_PRODUCTION_DOMAIN not found\.$#'
-		# FAUC_PLUGIN_BASENAME は define() の第2引数が plugin_basename() の
-		# 呼び出しであり、PHPStan の定数収集は関数呼び出しの戻り値を解決できないため
-		# 未定義として検出される（値はリテラルの FAUC_VERSION 等では発生しない）.
-		- '#^Constant FAUC_PLUGIN_BASENAME not found\.$#'
-		# update_plugins トランジェントは stdClass に動的にプロパティが生えるため
-		# 型情報を持たず、response / no_update への代入は WordPress 更新機構の
-		# 定型的な書き方（コアや他プラグインの実装でも同様）.
-		- '#^Access to an undefined property object::\$response\.$#'
-		- '#^Access to an undefined property object::\$no_update\.$#'
 
 includes:
 	- vendor/szepeviktor/phpstan-wordpress/extension.neon

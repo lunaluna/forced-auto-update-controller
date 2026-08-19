@@ -52,8 +52,8 @@ require_once plugin_dir_path( __FILE__ ) . 'includes/class-fauc-auto-update-cont
 /**
  * GitHub Releases ベースの自己更新機構の読み込み(l2d-wp-github-update-lib).
  */
-$l2dwpghul_updater_register = require plugin_dir_path( __FILE__ ) . 'lib/l2d-updater/loader.php';
-$l2dwpghul_updater_register(
+$fauc_updater_register = require plugin_dir_path( __FILE__ ) . 'lib/l2d-updater/loader.php';
+$fauc_updater_register(
 	array(
 		'plugin_file'   => __FILE__,
 		'github_repo'   => 'lunaluna/forced-auto-update-controller',
