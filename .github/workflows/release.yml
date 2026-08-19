@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. 1.8.0)'
+        description: 'Release tag (e.g. 1.9.0)'
         required: false
 
 permissions:
@@ -16,92 +16,10 @@ permissions:
 
 jobs:
   release:
-    name: Build and publish release
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Resolve tag and version
-        id: resolve
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG="${{ github.event.inputs.tag }}"
-          else
-            TAG="${GITHUB_REF#refs/tags/}"
-          fi
-
-          if [ -z "$TAG" ]; then
-            echo "::error::タグを解決できませんでした（workflow_dispatch では tag 入力が必須です）"
-            exit 1
-          fi
-
-          VERSION="${TAG#v}"
-
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-
-      - name: Verify version consistency (tag / header / constant / readme)
-        run: |
-          VERSION="${{ steps.resolve.outputs.version }}"
-          SLUG="forced-auto-update-controller"
-
-          HEADER_VERSION=$(grep -E '^[[:space:]]*\*[[:space:]]*Version:' "$SLUG.php" \
-            | head -n1 | sed -E 's/.*Version:[[:space:]]*//' | tr -d '\r')
-          CONST_VERSION=$(grep -E "define\([[:space:]]*'FAUC_VERSION'" "$SLUG.php" \
-            | head -n1 | sed -E "s/.*define\([[:space:]]*'FAUC_VERSION'[[:space:]]*,[[:space:]]*'([^']+)'.*/\1/")
-          STABLE_TAG=$(grep -E '^Stable tag:' readme.txt \
-            | head -n1 | sed -E 's/^Stable tag:[[:space:]]*//' | tr -d '\r')
-
-          FAILED=0
-
-          if [ "$HEADER_VERSION" != "$VERSION" ]; then
-            echo "::error::プラグインヘッダーの Version ($HEADER_VERSION) がタグ ($VERSION) と一致しません"
-            FAILED=1
-          fi
-
-          if [ "$CONST_VERSION" != "$VERSION" ]; then
-            echo "::error::FAUC_VERSION 定数 ($CONST_VERSION) がタグ ($VERSION) と一致しません"
-            FAILED=1
-          fi
-
-          if [ "$STABLE_TAG" != "$VERSION" ]; then
-            echo "::error::readme.txt の Stable tag ($STABLE_TAG) がタグ ($VERSION) と一致しません"
-            FAILED=1
-          fi
-
-          if [ "$FAILED" -ne 0 ]; then
-            exit 1
-          fi
-
-      - name: Build distribution ZIP
-        run: bash bin/build-zip.sh
-
-      - name: Extract release notes from readme.txt
-        id: notes
-        run: |
-          VERSION="${{ steps.resolve.outputs.version }}"
-
-          # readme.txt は .editorconfig の設定により CRLF 改行のため、
-          # 完全一致比較の前に行末の \r を取り除く.
-          awk -v ver="$VERSION" '
-            { sub(/\r$/, "") }
-            $0 == "= " ver " =" { capture = 1; next }
-            capture && /^= [0-9]/ { exit }
-            capture { print }
-          ' readme.txt > release-notes.txt
-
-          if [ ! -s release-notes.txt ]; then
-            echo "Release ${{ steps.resolve.outputs.tag }}." > release-notes.txt
-          fi
-
-      - name: Create GitHub Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          SLUG="forced-auto-update-controller"
-          VERSION="${{ steps.resolve.outputs.version }}"
-          TAG="${{ steps.resolve.outputs.tag }}"
-
-          gh release create "$TAG" "$SLUG.$VERSION.zip" \
-            --title "$TAG" \
-            --notes-file release-notes.txt
+    uses: lunaluna/l2d-wp-github-update-lib/.github/workflows/plugin-release.yml@v1.0.1
+    with:
+      slug: forced-auto-update-controller
+      version_files: |
+        forced-auto-update-controller.php:^[[:space:]]*\*[[:space:]]*Version:
+        readme.txt:^Stable tag:
+      notes_source: readme.txt
