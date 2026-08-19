@@ -1,12 +1,10 @@
 <?xml version="1.0"?>
-<ruleset name="ForcedAutoUpdateController">
-	<description>Coding standards for Forced Auto Update Controller.</description>
+<ruleset name="L2dWpGithubUpdateLib">
+	<description>Coding standards for l2d-wp-github-update-lib.</description>
 
 	<file>.</file>
 	<exclude-pattern>/vendor/*</exclude-pattern>
-	<exclude-pattern>/languages/*</exclude-pattern>
 	<exclude-pattern>/tests/*</exclude-pattern>
-	<exclude-pattern>/lib/*</exclude-pattern>
 
 	<arg value="sp"/>
 	<arg name="basepath" value="."/>
@@ -27,8 +25,8 @@
 	<rule ref="WordPress.NamingConventions.PrefixAllGlobals">
 		<properties>
 			<property name="prefixes" type="array">
-				<element value="fauc"/>
-				<element value="FAUC"/>
+				<element value="l2dwpghul"/>
+				<element value="L2dwpghul"/>
 			</property>
 		</properties>
 	</rule>
