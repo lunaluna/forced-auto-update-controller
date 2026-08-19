@@ -15,7 +15,47 @@ permissions:
   contents: write
 
 jobs:
+  verify-pot-version:
+    # languages/forced-auto-update-controller.pot の Project-Id-Version は
+    # 手動更新の現在バージョン表記だが、"Project-Id-Version: <製品名> <version>\n"
+    # という .pot 特有の書式(ラベルと version の間に製品名、末尾に \n" が付く)
+    # は verify-version composite action の抽出ロジック(単一クォート値 or
+    # パターン直後の残り全部)では正しく切り出せないため、専用ステップで
+    # チェックする(l2d-wp-github-update-lib 側の verify-version action は
+    # 変更しない — 他の利用プラグインにも影響する変更のため対象外)。
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve release version
+        id: resolve
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          if [ -z "$TAG" ]; then
+            echo "::error::タグを解決できませんでした(workflow_dispatch では tag 入力が必須です)"
+            exit 1
+          fi
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify .pot Project-Id-Version matches the release version
+        run: |
+          VERSION="${{ steps.resolve.outputs.version }}"
+          FILE="languages/forced-auto-update-controller.pot"
+          POT_VERSION=$(grep -E '^"Project-Id-Version:' "$FILE" \
+            | head -n1 | sed -E 's/.*[[:space:]]([0-9][0-9.]*)\\n"$/\1/')
+          echo "$FILE Project-Id-Version: $POT_VERSION"
+          echo "Release version:                                  $VERSION"
+          if [ "$POT_VERSION" != "$VERSION" ]; then
+            echo "::error::$FILE の Project-Id-Version ($POT_VERSION) がリリースバージョン ($VERSION) と一致しません"
+            exit 1
+          fi
+
   release:
+    needs: verify-pot-version
     uses: lunaluna/l2d-wp-github-update-lib/.github/workflows/plugin-release.yml@v1.0.2
     with:
       slug: forced-auto-update-controller
