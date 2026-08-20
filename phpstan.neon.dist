@@ -11,6 +11,10 @@ parameters:
 		# FAUC_PRODUCTION_DOMAIN はサイト側の wp-config.php 等で任意に定義される
 		# オプション定数のため、静的解析からは検出できない.
 		- '#^Constant FAUC_PRODUCTION_DOMAIN not found\.$#'
+		# compute_is_production_domain() は tests/DomainDetectionTest.php が Reflection
+		# 経由で直接呼ぶための委譲メソッド。プロダクションコードからは呼ばれないため
+		# phpstan の未使用メソッド検出は誤検知.
+		- '#^Method FAUC_Auto_Update_Controller::compute_is_production_domain\(\) is unused\.$#'
 
 includes:
 	- vendor/szepeviktor/phpstan-wordpress/extension.neon

@@ -32,11 +32,11 @@ class FAUC_Auto_Update_Controller {
 	private $option_name = 'FAUC_forced_auto_update_domain';
 
 	/**
-	 * 関数 is_production_domain() の結果のメモ化キャッシュ（未計算時は null）.
+	 * 関数 get_control_status() の結果のメモ化キャッシュ（未計算時は null）.
 	 *
-	 * @var bool|null
+	 * @var array|null
 	 */
-	private $is_production_domain_cache = null;
+	private $control_status_cache = null;
 
 	/**
 	 * コンストラクタ
@@ -718,52 +718,31 @@ class FAUC_Auto_Update_Controller {
 	 * 現在の環境がいずれかのパターンに一致するか（本番環境か）どうかを判定.
 	 *
 	 * 判定結果はリクエスト中に何度も呼ばれる（プラグイン数分ループするフィルタも
-	 * 含む）ため、インスタンスプロパティにメモ化して都度の get_option / preg_match を避ける.
+	 * 含む）ため、get_control_status() 側でインスタンスプロパティにメモ化される.
 	 *
 	 * @return bool true: 一致（本番） / false: 不一致（非本番）です.
 	 */
 	private function is_production_domain() {
-		if ( null !== $this->is_production_domain_cache ) {
-			return $this->is_production_domain_cache;
-		}
-
-		$this->is_production_domain_cache = $this->compute_is_production_domain();
-
-		return $this->is_production_domain_cache;
+		return $this->get_control_status()['active'];
 	}
 
 	/**
-	 * 関数 is_production_domain() の実処理（メモ化なし）.
+	 * 現在のサイトの home オプションから host（+ port + path）を組み立てて返す.
 	 *
-	 * @return bool
+	 * サイトURLの取得に home_url() を使わないのは、フィルタの影響を受け、動的な
+	 * WP_HOME 定義下では信頼できないため。DB上の生値である get_option('home') を
+	 * 比較対象にする.
+	 *
+	 * @return string host（取得できない場合は空文字）です.
 	 */
-	private function compute_is_production_domain() {
-		$patterns = $this->get_domain_patterns();
-
-		if ( empty( $patterns ) ) {
-			return false;
-		}
-
-		// wp_get_environment_type()（WP 5.5+）を補助的な条件として利用する.
-		// WP_ENVIRONMENT_TYPE 定数/環境変数で明示的に production 以外（staging 等）に
-		// 設定されている環境では、ドメインパターンが一致していても強制しない.
-		if ( function_exists( 'wp_get_environment_type' ) && 'production' !== wp_get_environment_type() ) {
-			return false;
-		}
-
-		// home_url() はフィルタの影響を受け、動的な WP_HOME 定義下では信頼できないため、
-		// DB上の生値である get_option('home') を比較対象にする.
+	private function get_detected_host() {
 		$url_parts = wp_parse_url( (string) get_option( 'home' ) );
 
-		if ( empty( $url_parts ) ) {
-			return false;
+		if ( empty( $url_parts ) || empty( $url_parts['host'] ) ) {
+			return '';
 		}
 
-		$host = isset( $url_parts['host'] ) ? $url_parts['host'] : '';
-
-		if ( empty( $host ) ) {
-			return false;
-		}
+		$host = $url_parts['host'];
 
 		// ポート番号があれば付与.
 		if ( ! empty( $url_parts['port'] ) ) {
@@ -772,12 +751,79 @@ class FAUC_Auto_Update_Controller {
 
 		$path = isset( $url_parts['path'] ) ? trim( $url_parts['path'], '/' ) : '';
 
-		$host_with_path = $host;
 		if ( '' !== $path ) {
-			$host_with_path .= '/' . $path;
+			$host .= '/' . $path;
 		}
 
-		$result = false;
+		return $host;
+	}
+
+	/**
+	 * 関数 get_control_status() の結果のメモ化ラッパ.
+	 *
+	 * @return array compute_control_status() の戻り値です.
+	 */
+	private function get_control_status() {
+		if ( null === $this->control_status_cache ) {
+			$this->control_status_cache = $this->compute_control_status();
+		}
+
+		return $this->control_status_cache;
+	}
+
+	/**
+	 * 強制制御が有効かどうかを、理由付きで算出する（メモ化なし）.
+	 *
+	 * 設定画面の notice も一覧の判定もすべてこの結果を単一の情報源として使う.
+	 *
+	 * @return array {
+	 *     @type bool     $active           強制制御が有効かどうかです.
+	 *     @type string   $reason           判定理由（unconfigured|environment_type|no_host|domain_mismatch|filtered_off|active）です.
+	 *     @type string   $detected         get_detected_host() の値です.
+	 *     @type string[] $patterns         検証済み・小文字化済みのドメインパターンです.
+	 *     @type string   $environment_type wp_get_environment_type() の値です.
+	 * }
+	 */
+	private function compute_control_status() {
+		$patterns         = $this->get_domain_patterns();
+		$environment_type = function_exists( 'wp_get_environment_type' ) ? wp_get_environment_type() : '';
+		$detected         = $this->get_detected_host();
+
+		if ( empty( $patterns ) ) {
+			return array(
+				'active'           => false,
+				'reason'           => 'unconfigured',
+				'detected'         => $detected,
+				'patterns'         => array(),
+				'environment_type' => $environment_type,
+			);
+		}
+
+		// wp_get_environment_type()（WP 5.5+）を補助的な条件として利用する.
+		// WP_ENVIRONMENT_TYPE 定数/環境変数で明示的に production 以外（staging 等）に
+		// 設定されている環境では、ドメインパターンが一致していても強制しない.
+		if ( function_exists( 'wp_get_environment_type' ) && 'production' !== $environment_type ) {
+			return array(
+				'active'           => false,
+				'reason'           => 'environment_type',
+				'detected'         => $detected,
+				'patterns'         => $patterns,
+				'environment_type' => $environment_type,
+			);
+		}
+
+		if ( '' === $detected ) {
+			return array(
+				'active'           => false,
+				'reason'           => 'no_host',
+				'detected'         => '',
+				'patterns'         => $patterns,
+				'environment_type' => $environment_type,
+			);
+		}
+
+		$normalized_patterns = array();
+		$result              = false;
 
 		foreach ( $patterns as $pattern ) {
 			$pattern = preg_replace( '#^https?://#i', '', $pattern );
@@ -793,9 +839,11 @@ class FAUC_Auto_Update_Controller {
 			}
 
 			// 小文字に正規化して比較.
-			if ( strtolower( $host_with_path ) === strtolower( $pattern ) ) {
+			$pattern               = strtolower( $pattern );
+			$normalized_patterns[] = $pattern;
+
+			if ( strtolower( $detected ) === $pattern ) {
 				$result = true;
-				break;
 			}
 		}
 
@@ -807,7 +855,35 @@ class FAUC_Auto_Update_Controller {
 		 * @param bool     $result   判定結果です.
 		 * @param string[] $patterns 判定に使用したドメインパターンの配列です.
 		 */
-		return (bool) apply_filters( 'fauc_is_production_domain', $result, $patterns );
+		$filtered = (bool) apply_filters( 'fauc_is_production_domain', $result, $patterns );
+
+		if ( $filtered ) {
+			$reason = 'active';
+		} elseif ( $result ) {
+			$reason = 'filtered_off';
+		} else {
+			$reason = 'domain_mismatch';
+		}
+
+		return array(
+			'active'           => $filtered,
+			'reason'           => $reason,
+			'detected'         => $detected,
+			'patterns'         => $normalized_patterns,
+			'environment_type' => $environment_type,
+		);
+	}
+
+	/**
+	 * 関数 is_production_domain() の実処理（メモ化なし）.
+	 *
+	 * 既存の回帰テスト (tests/DomainDetectionTest.php) をこのメソッド名のまま
+	 * 維持するため、compute_control_status() への薄い委譲として残す.
+	 *
+	 * @return bool
+	 */
+	private function compute_is_production_domain() {
+		return $this->compute_control_status()['active'];
 	}
 
 	/**
