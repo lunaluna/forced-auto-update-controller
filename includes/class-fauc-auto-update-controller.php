@@ -1773,6 +1773,20 @@ class FAUC_Auto_Update_Controller {
 		$redirect_to = wp_get_referer();
 
 		wp_safe_redirect( $redirect_to ? $redirect_to : admin_url() );
+		$this->terminate_request();
+	}
+
+	/**
+	 * リクエスト処理を終了する.
+	 *
+	 * リダイレクト送出（wp_safe_redirect()）の直後に呼ぶ分離ポイントとして
+	 * 用意した。テストでは PHPUnit プロセス自体を終了させる exit を直接呼べ
+	 * ないため、サブクラスでオーバーライドして例外に置き換える（本番では
+	 * 通常の exit と同じ）.
+	 *
+	 * @return void
+	 */
+	protected function terminate_request() {
 		exit;
 	}
 }

@@ -13,11 +13,24 @@
 
 define( 'ABSPATH', __DIR__ . '/' );
 
-$GLOBALS['fauc_test_options']          = array();
-$GLOBALS['fauc_test_site_options']     = array();
-$GLOBALS['fauc_test_env_type']         = 'production';
-$GLOBALS['fauc_test_filters']          = array();
-$GLOBALS['fauc_test_settings_errors']  = array();
+$GLOBALS['fauc_test_options']           = array();
+$GLOBALS['fauc_test_site_options']      = array();
+$GLOBALS['fauc_test_env_type']          = 'production';
+$GLOBALS['fauc_test_filters']           = array();
+$GLOBALS['fauc_test_settings_errors']   = array();
+$GLOBALS['fauc_test_transients']        = array();
+$GLOBALS['fauc_test_site_transients']   = array();
+$GLOBALS['fauc_test_current_user_can']  = true;
+$GLOBALS['fauc_test_admin_referer_ok']  = true;
+$GLOBALS['fauc_test_referer']           = false;
+$GLOBALS['fauc_test_wp_die_calls']      = array();
+$GLOBALS['fauc_test_redirects']         = array();
+
+if ( ! defined( 'WEEK_IN_SECONDS' ) ) {
+	define( 'WEEK_IN_SECONDS', 7 * 24 * 60 * 60 );
+}
+
+require_once __DIR__ . '/class-fauc-test-wp-die-exception.php';
 
 /**
  * add_action() のスタブ.
@@ -139,6 +152,204 @@ function add_settings_error( $setting, $code, $message, $type = 'error' ) {
  */
 function __( $text, $domain = null ) {
 	return $text;
+}
+
+/**
+ * Set_transient() のスタブ. $GLOBALS['fauc_test_transients'] に値と有効期限を記録する.
+ *
+ * @param string $transient  transient 名.
+ * @param mixed  $value      値.
+ * @param int    $expiration 有効期限（秒）.
+ * @return true
+ */
+function set_transient( $transient, $value, $expiration = 0 ) {
+	$GLOBALS['fauc_test_transients'][ $transient ] = array(
+		'value'      => $value,
+		'expiration' => $expiration,
+	);
+	return true;
+}
+
+/**
+ * Get_transient() のスタブ.
+ *
+ * @param string $transient transient 名.
+ * @return mixed 未設定の場合は false.
+ */
+function get_transient( $transient ) {
+	return isset( $GLOBALS['fauc_test_transients'][ $transient ] )
+		? $GLOBALS['fauc_test_transients'][ $transient ]['value']
+		: false;
+}
+
+/**
+ * Delete_transient() のスタブ.
+ *
+ * @param string $transient transient 名.
+ * @return bool 削除前に存在していれば true.
+ */
+function delete_transient( $transient ) {
+	$existed = isset( $GLOBALS['fauc_test_transients'][ $transient ] );
+	unset( $GLOBALS['fauc_test_transients'][ $transient ] );
+	return $existed;
+}
+
+/**
+ * Set_site_transient() のスタブ. $GLOBALS['fauc_test_site_transients'] に記録する.
+ *
+ * @param string $transient  transient 名.
+ * @param mixed  $value      値.
+ * @param int    $expiration 有効期限（秒）.
+ * @return true
+ */
+function set_site_transient( $transient, $value, $expiration = 0 ) {
+	$GLOBALS['fauc_test_site_transients'][ $transient ] = array(
+		'value'      => $value,
+		'expiration' => $expiration,
+	);
+	return true;
+}
+
+/**
+ * Get_site_transient() のスタブ.
+ *
+ * @param string $transient transient 名.
+ * @return mixed 未設定の場合は false.
+ */
+function get_site_transient( $transient ) {
+	return isset( $GLOBALS['fauc_test_site_transients'][ $transient ] )
+		? $GLOBALS['fauc_test_site_transients'][ $transient ]['value']
+		: false;
+}
+
+/**
+ * Delete_site_transient() のスタブ.
+ *
+ * @param string $transient transient 名.
+ * @return bool 削除前に存在していれば true.
+ */
+function delete_site_transient( $transient ) {
+	$existed = isset( $GLOBALS['fauc_test_site_transients'][ $transient ] );
+	unset( $GLOBALS['fauc_test_site_transients'][ $transient ] );
+	return $existed;
+}
+
+/**
+ * Current_user_can() のスタブ. $GLOBALS['fauc_test_current_user_can'] を返す.
+ *
+ * @param string $capability 権限（未使用）.
+ * @return bool
+ */
+function current_user_can( $capability ) {
+	return $GLOBALS['fauc_test_current_user_can'];
+}
+
+/**
+ * Wp_die() のスタブ. 呼び出しを記録し、実際の処理中断は例外で表現する.
+ *
+ * @param string|WP_Error $message エラーメッセージ.
+ * @param string          $title   タイトル（未使用）.
+ * @param array           $args    引数（response コード等）.
+ * @return void
+ * @throws FAUC_Test_WP_Die_Exception 常に投げる.
+ */
+function wp_die( $message = '', $title = '', $args = array() ) {
+	$GLOBALS['fauc_test_wp_die_calls'][] = array(
+		'message' => $message,
+		'title'   => $title,
+		'args'    => $args,
+	);
+	throw new FAUC_Test_WP_Die_Exception( is_string( $message ) ? $message : 'wp_die' );
+}
+
+/**
+ * Check_admin_referer() のスタブ. $GLOBALS['fauc_test_admin_referer_ok'] が
+ * false の場合、実際の WordPress と同様に wp_die() を呼んで処理を中断する.
+ *
+ * @param int|string $action    nonce のアクション名（未使用）.
+ * @param string     $query_arg nonce のクエリ引数名（未使用）.
+ * @return int|void
+ */
+function check_admin_referer( $action = -1, $query_arg = '_wpnonce' ) {
+	if ( ! $GLOBALS['fauc_test_admin_referer_ok'] ) {
+		wp_die( '辿ったリンクは期限が切れています。', '', array( 'response' => 403 ) );
+	}
+	return 1;
+}
+
+/**
+ * Wp_get_referer() のスタブ. $GLOBALS['fauc_test_referer'] を返す.
+ *
+ * @return string|false
+ */
+function wp_get_referer() {
+	return $GLOBALS['fauc_test_referer'];
+}
+
+/**
+ * Wp_safe_redirect() のスタブ. 呼び出しを記録する.
+ *
+ * @param string $location リダイレクト先.
+ * @param int    $status   HTTP ステータスコード.
+ * @return true
+ */
+function wp_safe_redirect( $location, $status = 302 ) {
+	$GLOBALS['fauc_test_redirects'][] = array(
+		'location' => $location,
+		'status'   => $status,
+	);
+	return true;
+}
+
+/**
+ * Admin_url() のスタブ.
+ *
+ * @param string $path 追加パス.
+ * @return string
+ */
+function admin_url( $path = '' ) {
+	return 'https://example.com/wp-admin/' . ltrim( $path, '/' );
+}
+
+require_once __DIR__ . '/class-fauc-test-wp-error.php';
+
+/**
+ * Is_wp_error() のスタブ.
+ *
+ * @param mixed $thing 判定対象.
+ * @return bool
+ */
+function is_wp_error( $thing ) {
+	return $thing instanceof FAUC_Test_WP_Error;
+}
+
+/**
+ * Esc_html__() のスタブ. 翻訳・エスケープせず素通しする.
+ *
+ * @param string      $text   翻訳対象の文字列.
+ * @param string|null $domain テキストドメイン（未使用）.
+ * @return string
+ */
+function esc_html__( $text, $domain = null ) {
+	return $text;
+}
+
+/**
+ * Get_plugins() のスタブ. $GLOBALS['fauc_test_plugins'] を返す.
+ *
+ * @return array
+ */
+function get_plugins() {
+	return isset( $GLOBALS['fauc_test_plugins'] ) ? $GLOBALS['fauc_test_plugins'] : array();
+}
+
+/**
+ * Wp_get_themes() のスタブ. $GLOBALS['fauc_test_themes'] を返す.
+ *
+ * @return array
+ */
+function wp_get_themes() {
+	return isset( $GLOBALS['fauc_test_themes'] ) ? $GLOBALS['fauc_test_themes'] : array();
 }
 
 require_once dirname( __DIR__ ) . '/includes/class-fauc-auto-update-controller.php';
