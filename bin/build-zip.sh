@@ -1,30 +1,13 @@
 #!/usr/bin/env bash
 #
-# 配布用 ZIP をローカルでビルドする（CI の release.yml と同一ロジック）.
+# 配布用 ZIP をビルドする.
 #
-# 除外定義は .distignore を単一の正とし、このスクリプトと release.yml の
-# 両方がそれを読む。
+# 実処理は同梱ライブラリの汎用ビルダーに委譲する。除外定義はプラグインルートの
+# .distignore が単一の正であり、リリースワークフローの build-zip composite
+# action もこのスクリプトを経由して同じ .distignore を読む.
+#
+# 呼び出し先はディレクトリを移動しないため、プラグインルートで実行すること.
 
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
-
-SLUG="forced-auto-update-controller"
-VERSION=$(grep -E '^[[:space:]]*\*[[:space:]]*Version:' "$SLUG.php" \
-  | head -n1 | sed -E 's/.*Version:[[:space:]]*//' | tr -d '\r')
-
-STAGE=$(mktemp -d)
-trap 'rm -rf "$STAGE"' EXIT
-
-mkdir -p "$STAGE/$SLUG"
-
-# rsync の --exclude-from に渡す前に、コメント行・空行を除去する
-# （--exclude-from がコメント行をどう扱うかは未検証のため、依存しない）.
-grep -vE '^[[:space:]]*(#|$)' .distignore > "$STAGE/excludes.txt"
-
-rsync -a --exclude-from="$STAGE/excludes.txt" ./ "$STAGE/$SLUG/"
-
-( cd "$STAGE" && zip -rq "$SLUG.$VERSION.zip" "$SLUG" )
-mv "$STAGE/$SLUG.$VERSION.zip" "./$SLUG.$VERSION.zip"
-
-echo "Built: $SLUG.$VERSION.zip"
+bash lib/l2d-updater/bin/build-zip.sh

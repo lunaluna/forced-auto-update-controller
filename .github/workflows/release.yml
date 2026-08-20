@@ -56,7 +56,7 @@ jobs:
 
   release:
     needs: verify-pot-version
-    uses: lunaluna/l2d-wp-github-update-lib/.github/workflows/plugin-release.yml@v1.0.3
+    uses: lunaluna/l2d-wp-github-update-lib/.github/workflows/plugin-release.yml@1.1.0
     with:
       slug: forced-auto-update-controller
       version_files: |
