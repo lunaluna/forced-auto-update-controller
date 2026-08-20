@@ -25,6 +25,10 @@ delete_option( 'FAUC_forced_auto_update_domain_excluded_themes' );
 delete_option( 'FAUC_forced_auto_update_domain_hide_wp_updates' );
 // 非本番環境でもコアのマイナー/セキュリティ自動更新を許可する設定.
 delete_option( 'FAUC_forced_auto_update_domain_allow_core_minor_everywhere' );
+// WP_ENVIRONMENT_TYPE によるゲートを無視する設定.
+delete_option( 'FAUC_forced_auto_update_domain_ignore_environment_type' );
+// 除外リスト以外のプラグイン・テーマを強制的に自動更新ONにする設定.
+delete_option( 'FAUC_forced_auto_update_domain_force_non_excluded' );
 // 直近の自動更新実行結果の通知用データ.
 delete_transient( 'FAUC_forced_auto_update_domain_last_auto_update_summary' );
 // GitHub Releases 更新機構のリリース情報キャッシュ.

@@ -2,14 +2,14 @@
 # This file is distributed under the GPLv2 or later.
 msgid ""
 msgstr ""
-"Project-Id-Version: Forced Auto Update Controller 1.9.1\n"
+"Project-Id-Version: Forced Auto Update Controller 1.9.2\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/forced-auto-update-controller\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-08-18T11:29:45+00:00\n"
+"POT-Creation-Date: 2026-08-20T11:33:52+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: forced-auto-update-controller\n"
@@ -39,232 +39,315 @@ msgstr ""
 msgid "https://profiles.wordpress.org/lunaluna_dev/"
 msgstr ""
 
-#: forced-auto-update-controller.php:82
+#: forced-auto-update-controller.php:86
 msgid "GitHub"
 msgstr ""
 
-#: forced-auto-update-controller.php:101
+#: forced-auto-update-controller.php:105
 msgid "Settings"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:155
-#: includes/class-fauc-auto-update-controller.php:156
+#: includes/class-fauc-auto-update-controller.php:163
+#: includes/class-fauc-auto-update-controller.php:164
 msgid "Forced Auto Update Control"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:178
+#: includes/class-fauc-auto-update-controller.php:186
 msgid "Forced Auto Update Control 設定"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:213
+#: includes/class-fauc-auto-update-controller.php:221
 msgid "Auto Updates 設定"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:221
+#: includes/class-fauc-auto-update-controller.php:229
 msgid "自動更新を強制的に有効化する URL (ドメイン)パターン"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:230
+#: includes/class-fauc-auto-update-controller.php:238
 msgid "自動更新を除外したいプラグイン"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:239
+#: includes/class-fauc-auto-update-controller.php:247
 msgid "自動更新を除外したいテーマ"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:248
+#: includes/class-fauc-auto-update-controller.php:256
 msgid "非本番環境でもコアのマイナー/セキュリティ自動更新を許可する"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:262
+#: includes/class-fauc-auto-update-controller.php:265
+msgid "WP_ENVIRONMENT_TYPE を無視する"
+msgstr ""
+
+#: includes/class-fauc-auto-update-controller.php:274
+msgid "除外リスト以外を強制ONにする"
+msgstr ""
+
+#: includes/class-fauc-auto-update-controller.php:288
 msgid "Update 通知設定"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:270
+#: includes/class-fauc-auto-update-controller.php:296
 msgid "WordPress本体の更新通知を非表示にする"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:343
-msgid "指定したドメインに合致した場合、Git などのバージョン管理下でも各プラグイン・テーマの個別の自動更新設定が有効に機能するようになります。下記のチェックリストで除外したプラグイン・テーマは、個別設定の状態にかかわらず自動更新されません。"
+#: includes/class-fauc-auto-update-controller.php:391
+msgid "指定したドメインに合致した場合、Git などのバージョン管理下でもプラグイン・テーマの自動更新が機能するようになります。「除外リスト以外を強制ONにする」がデフォルトで有効なため、下記のチェックリストで除外しない限りプラグイン・テーマは自動更新されます。オフにすると各プラグイン・テーマの個別の自動更新設定（一覧画面のトグル）に従います。"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:357
+#: includes/class-fauc-auto-update-controller.php:405
 msgid "WordPress本体のみ、更新通知（バナーやボタン、更新ページの文言など）を非表示にできます。プラグイン・テーマの更新通知はそのまま表示されます。"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:373
+#: includes/class-fauc-auto-update-controller.php:421
 msgid "ここに有効化したいサイトのドメインを入力します。複数の本番ドメイン（www の有無や複数系統の運用など）がある場合は1行に1つずつ入力してください。サブディレクトリで公開している場合はサブディレクトリも含めてください。「https://」や最後の「/」は不要です。"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:380
+#: includes/class-fauc-auto-update-controller.php:428
 msgid "FAUC_PRODUCTION_DOMAIN 定数で固定されているため、この設定は無効です（定数の値が優先されます）。"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:385
+#: includes/class-fauc-auto-update-controller.php:443
 msgid ""
 "example.com\n"
 "example.com/sample"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:416
+#: includes/class-fauc-auto-update-controller.php:455
 msgid "検出されたサイトドメイン:"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:424
+#: includes/class-fauc-auto-update-controller.php:463
 msgid "保存済みパターンと一致しています。プラグインの自動更新制御は有効です。"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:429
+#. translators: %s: wp_get_environment_type() の値です.
+#: includes/class-fauc-auto-update-controller.php:470
+#, php-format
+msgid "環境タイプは %s ですが、「WP_ENVIRONMENT_TYPE を無視する」設定が有効なため強制制御は有効です。"
+msgstr ""
+
+#. translators: %s: wp_get_environment_type() の値です.
+#: includes/class-fauc-auto-update-controller.php:482
+#, php-format
+msgid "パターンは一致していますが、WP_ENVIRONMENT_TYPE が %s のため強制制御は無効です。"
+msgstr ""
+
+#: includes/class-fauc-auto-update-controller.php:488
+msgid "「WP_ENVIRONMENT_TYPE を無視する」を有効にすると、この環境でも強制制御を有効にできます。"
+msgstr ""
+
+#: includes/class-fauc-auto-update-controller.php:495
 msgid "保存済みパターンと一致しません。自動更新制御は無効の状態です。"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:433
+#: includes/class-fauc-auto-update-controller.php:499
 msgid "保存値:"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:435
+#: includes/class-fauc-auto-update-controller.php:501
 msgid "検出値:"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:442
+#: includes/class-fauc-auto-update-controller.php:509
+msgid "サイトURL（home オプション）を解釈できません。"
+msgstr ""
+
+#: includes/class-fauc-auto-update-controller.php:516
+msgid "fauc_is_production_domain フィルタにより無効化されています。"
+msgstr ""
+
+#: includes/class-fauc-auto-update-controller.php:524
 msgid "ドメインパターンが未設定です。上記の検出値を参考に入力してください。"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:461
+#: includes/class-fauc-auto-update-controller.php:544
 msgid "チェックを入れると「自動更新の対象から外す」プラグインになります。"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:477
+#: includes/class-fauc-auto-update-controller.php:560
 msgid "プラグインがインストールされていません。"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:494
+#: includes/class-fauc-auto-update-controller.php:577
 msgid "チェックを入れると「自動更新の対象から外す」テーマになります。"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:509
+#: includes/class-fauc-auto-update-controller.php:592
 msgid "テーマがインストールされていません。"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:525
+#: includes/class-fauc-auto-update-controller.php:608
 msgid "ドメインパターンに一致しない環境でも、コアのマイナー/セキュリティ自動更新のみは許可します（推奨）。"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:543
+#: includes/class-fauc-auto-update-controller.php:624
+msgid "ドメインパターンが一致していれば、WP_ENVIRONMENT_TYPE が production 以外でも強制制御を有効にします。"
+msgstr ""
+
+#: includes/class-fauc-auto-update-controller.php:640
+msgid "強制制御が有効な環境で、除外リストに入れたプラグイン・テーマ以外は個別トグルの設定にかかわらず自動更新を強制的に有効にします（推奨）。オフにすると個別トグルの設定を尊重します。"
+msgstr ""
+
+#: includes/class-fauc-auto-update-controller.php:658
 msgid "チェックを入れると WordPress の更新通知が非表示になります。"
 msgstr ""
 
 #. translators: %s: 無効な入力行です.
-#: includes/class-fauc-auto-update-controller.php:588
+#: includes/class-fauc-auto-update-controller.php:703
 #, php-format
 msgid "ドメインパターンの形式が正しくありません: 「%s」。例: example.com、example.com/sample など"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:603
+#: includes/class-fauc-auto-update-controller.php:718
 msgid "ドメインパターンが無効です。1行に1つずつ、正しい形式で入力してください。"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:1090
+#: includes/class-fauc-auto-update-controller.php:1310
 msgid "Forced Auto Update Controller: ドメインパターンが未設定です。設定するまで自動更新の強制制御は行われません。"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:1092
-#: includes/class-fauc-auto-update-controller.php:1099
-msgid "設定画面へ"
+#. translators: %s: wp_get_environment_type() の値です.
+#: includes/class-fauc-auto-update-controller.php:1313
+#, php-format
+msgid "Forced Auto Update Controller: 保存済みのドメインパターンは一致していますが、WP_ENVIRONMENT_TYPE が %s のため強制制御は無効です。"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:1097
+#: includes/class-fauc-auto-update-controller.php:1316
+msgid "Forced Auto Update Controller: サイトURL（home オプション）を解釈できないため、自動更新の強制制御は無効の状態です。"
+msgstr ""
+
+#: includes/class-fauc-auto-update-controller.php:1317
 msgid "Forced Auto Update Controller: 保存済みのドメインパターンが現在のサイトドメインと一致していません。自動更新の強制制御は無効の状態です。"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:1119
-msgid "Forced Auto Update Controller: マルチサイト環境は正式にサポートしていません。サブサイト単位のドメイン判定でネットワーク全体の自動更新設定を上書きするため、意図しないサイトへ影響が及ぶ可能性があります。ご利用は自己責任でお願いします。"
+#: includes/class-fauc-auto-update-controller.php:1318
+msgid "Forced Auto Update Controller: fauc_is_production_domain フィルタにより自動更新の強制制御が無効化されています。"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:1139
-#: includes/class-fauc-auto-update-controller.php:1146
-msgid "Forced Auto Update Controller Notice"
-msgstr ""
-
-#: includes/class-fauc-auto-update-controller.php:1165
-#: includes/class-fauc-auto-update-controller.php:1188
-msgid "このサイトに関する注意事項"
-msgstr ""
-
-#: includes/class-fauc-auto-update-controller.php:1166
-msgid "このサイトは Git などでバージョン管理されていますが、Forced Auto update Controller プラグインにより自動更新が強制的に有効になっています。"
-msgstr ""
-
-#: includes/class-fauc-auto-update-controller.php:1167
-msgid "サーバー上のファイルが自動で更新され、Git などバージョン管理との整合が崩れる恐れがありますので、作業着手前にドメインで指定された環境の差分をコミットする、あるいは差分をいったんすべて削除してからデプロイするなど、Git との連携において留意すべき点があることに充分注意してください。"
-msgstr ""
-
-#: includes/class-fauc-auto-update-controller.php:1189
-msgid "このサイトは Git などでバージョン管理されていますが、Forced Auto update Controller プラグインのドメインパターンに合致したサイト（公開環境など）では自動更新が有効になっています。"
-msgstr ""
-
-#: includes/class-fauc-auto-update-controller.php:1190
-msgid "この場合、ドメインパターンに合致したサイトではサーバー上のファイルが自動で更新され、Git などバージョン管理との整合が崩れる恐れがあります。作業着手前にドメインで指定された環境の差分をコミットする、あるいは差分をいったんすべて削除してからデプロイするなど、Git との連携において留意すべき点があることに充分注意してください。"
-msgstr ""
-
-#: includes/class-fauc-auto-update-controller.php:1268
-msgid "現在のコアバージョン:"
-msgstr ""
-
-#: includes/class-fauc-auto-update-controller.php:1275
-msgid "保留中の更新があります:"
-msgstr ""
-
-#: includes/class-fauc-auto-update-controller.php:1279
-msgid "保留中の更新はありません。"
-msgstr ""
-
-#: includes/class-fauc-auto-update-controller.php:1284
-msgid "このプラグインによるコア自動更新:"
-msgstr ""
-
-#: includes/class-fauc-auto-update-controller.php:1286
-msgid "有効です。"
-msgstr ""
-
-#: includes/class-fauc-auto-update-controller.php:1287
-msgid "無効です（ドメインパターン未一致）。"
+#: includes/class-fauc-auto-update-controller.php:1328
+msgid "設定画面へ"
 msgstr ""
 
 #: includes/class-fauc-auto-update-controller.php:1347
-msgid "Forced Auto Update Controller: 更新通知抑止の整合性"
+msgid "Forced Auto Update Controller: マルチサイト環境は正式にサポートしていません。サブサイト単位のドメイン判定でネットワーク全体の自動更新設定を上書きするため、意図しないサイトへ影響が及ぶ可能性があります。ご利用は自己責任でお願いします。"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:1365
-msgid "更新通知の抑止設定は自動更新の状態と整合しています"
+#: includes/class-fauc-auto-update-controller.php:1367
+#: includes/class-fauc-auto-update-controller.php:1374
+msgid "Forced Auto Update Controller Notice"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:1368
-msgid "セキュリティ"
-msgstr ""
-
-#: includes/class-fauc-auto-update-controller.php:1373
-msgid "Forced Auto Update Controller の「WordPress本体の更新通知を非表示にする」設定は、コア自動更新が実際に有効な環境でのみ機能しています。"
-msgstr ""
-
-#: includes/class-fauc-auto-update-controller.php:1384
-msgid "WordPress本体の更新通知が非表示なのに、コア自動更新が機能していません"
-msgstr ""
-
-#: includes/class-fauc-auto-update-controller.php:1388
-msgid "Forced Auto Update Controller の「WordPress本体の更新通知を非表示にする」がONですが、ドメインパターンが未設定または現在のサイトと一致していないため、コアの自動更新は機能していません。更新の必要性に誰も気づけない状態になっている可能性があります。"
+#: includes/class-fauc-auto-update-controller.php:1393
+#: includes/class-fauc-auto-update-controller.php:1416
+msgid "このサイトに関する注意事項"
 msgstr ""
 
 #: includes/class-fauc-auto-update-controller.php:1394
+msgid "このサイトは Git などでバージョン管理されていますが、Forced Auto update Controller プラグインにより自動更新が強制的に有効になっています。"
+msgstr ""
+
+#: includes/class-fauc-auto-update-controller.php:1395
+msgid "サーバー上のファイルが自動で更新され、Git などバージョン管理との整合が崩れる恐れがありますので、作業着手前にドメインで指定された環境の差分をコミットする、あるいは差分をいったんすべて削除してからデプロイするなど、Git との連携において留意すべき点があることに充分注意してください。"
+msgstr ""
+
+#: includes/class-fauc-auto-update-controller.php:1417
+msgid "このサイトは Git などでバージョン管理されていますが、Forced Auto update Controller プラグインのドメインパターンに合致したサイト（公開環境など）では自動更新が有効になっています。"
+msgstr ""
+
+#: includes/class-fauc-auto-update-controller.php:1418
+msgid "この場合、ドメインパターンに合致したサイトではサーバー上のファイルが自動で更新され、Git などバージョン管理との整合が崩れる恐れがあります。作業着手前にドメインで指定された環境の差分をコミットする、あるいは差分をいったんすべて削除してからデプロイするなど、Git との連携において留意すべき点があることに充分注意してください。"
+msgstr ""
+
+#: includes/class-fauc-auto-update-controller.php:1496
+msgid "現在のコアバージョン:"
+msgstr ""
+
+#: includes/class-fauc-auto-update-controller.php:1503
+msgid "保留中の更新があります:"
+msgstr ""
+
+#: includes/class-fauc-auto-update-controller.php:1507
+msgid "保留中の更新はありません。"
+msgstr ""
+
+#: includes/class-fauc-auto-update-controller.php:1512
+msgid "このプラグインによるコア自動更新:"
+msgstr ""
+
+#: includes/class-fauc-auto-update-controller.php:1528
+msgid "有効です。"
+msgstr ""
+
+#. translators: %s: wp_get_environment_type() の値です.
+#: includes/class-fauc-auto-update-controller.php:1533
+#, php-format
+msgid "無効です（WP_ENVIRONMENT_TYPE が %s のため）。"
+msgstr ""
+
+#: includes/class-fauc-auto-update-controller.php:1538
+msgid "無効です（サイトURLを解釈できないため）。"
+msgstr ""
+
+#: includes/class-fauc-auto-update-controller.php:1541
+msgid "無効です（fauc_is_production_domain フィルタにより無効化）。"
+msgstr ""
+
+#: includes/class-fauc-auto-update-controller.php:1544
+msgid "無効です（ドメインパターン未一致）。"
+msgstr ""
+
+#: includes/class-fauc-auto-update-controller.php:1548
+msgid "無効です（ドメインパターン未設定）。"
+msgstr ""
+
+#: includes/class-fauc-auto-update-controller.php:1606
+msgid "Forced Auto Update Controller: 更新通知抑止の整合性"
+msgstr ""
+
+#: includes/class-fauc-auto-update-controller.php:1624
+msgid "更新通知の抑止設定は自動更新の状態と整合しています"
+msgstr ""
+
+#: includes/class-fauc-auto-update-controller.php:1627
+msgid "セキュリティ"
+msgstr ""
+
+#: includes/class-fauc-auto-update-controller.php:1632
+msgid "Forced Auto Update Controller の「WordPress本体の更新通知を非表示にする」設定は、コア自動更新が実際に有効な環境でのみ機能しています。"
+msgstr ""
+
+#: includes/class-fauc-auto-update-controller.php:1643
+msgid "WordPress本体の更新通知が非表示なのに、コア自動更新が機能していません"
+msgstr ""
+
+#: includes/class-fauc-auto-update-controller.php:1647
+msgid "Forced Auto Update Controller の「WordPress本体の更新通知を非表示にする」がONですが、ドメインパターンが未設定または現在のサイトと一致していないため、コアの自動更新は機能していません。更新の必要性に誰も気づけない状態になっている可能性があります。"
+msgstr ""
+
+#: includes/class-fauc-auto-update-controller.php:1653
 msgid "設定画面を開く"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:1465
+#: includes/class-fauc-auto-update-controller.php:1737
 msgid "Forced Auto Update Controller: 自動更新が実行されました。"
 msgstr ""
 
-#: includes/class-fauc-auto-update-controller.php:1466
+#: includes/class-fauc-auto-update-controller.php:1738
 msgid "デプロイ前に、サーバー上の差分をバージョン管理側へ取り込んでください。"
+msgstr ""
+
+#: includes/class-fauc-auto-update-controller.php:1748
+msgid "確認済みにする（通知を消す）"
+msgstr ""
+
+#: includes/class-fauc-auto-update-controller.php:1763
+msgid "この操作を行う権限がありません。"
+msgstr ""
+
+#: includes/class-fauc-auto-update-controller.php:1764
+msgid "権限エラー"
 msgstr ""
 
 #. translators: 1: required PHP version, 2: required WordPress version, 3: current PHP version, 4: current WordPress version.

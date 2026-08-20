@@ -4,8 +4,9 @@
  *
  * ドメインパターンを指定し、パターンが一致したら
  *   - コア/翻訳ファイルの自動更新を強制的に有効化
- *   - プラグイン/テーマは、個別トグル（auto_update_plugins/themes）の設定を尊重して
- *     Git などのバージョン管理下でも自動更新が機能するようにする
+ *   - プラグイン/テーマは、除外リストに入れていない限り自動更新を強制的に有効化する
+ *     （Git などのバージョン管理下でも自動更新が機能するようにする。設定でオフにすると
+ *     個別トグル（auto_update_plugins/themes）の設定を尊重する挙動に戻せる）
  *   - プラグイン/テーマ一覧に自動更新トグルUI (WP5.5+) を表示
  *   - ただし、チェックが入っているプラグイン・テーマは自動更新を強制除外
  * それ以外の環境では自動更新を無効化し、UI も非表示にする
@@ -32,11 +33,11 @@ class FAUC_Auto_Update_Controller {
 	private $option_name = 'FAUC_forced_auto_update_domain';
 
 	/**
-	 * 関数 is_production_domain() の結果のメモ化キャッシュ（未計算時は null）.
+	 * 関数 get_control_status() の結果のメモ化キャッシュ（未計算時は null）.
 	 *
-	 * @var bool|null
+	 * @var array|null
 	 */
-	private $is_production_domain_cache = null;
+	private $control_status_cache = null;
 
 	/**
 	 * コンストラクタ
@@ -143,6 +144,13 @@ class FAUC_Auto_Update_Controller {
 		 */
 		add_action( 'automatic_updates_complete', array( $this, 'handle_automatic_updates_complete' ) );
 		add_action( 'admin_notices', array( $this, 'render_last_auto_update_notice' ) );
+
+		/**
+		 * (13-1) 自動更新実行通知の「確認済みにする（通知を消す）」ボタンのハンドラ.
+		 *
+		 * Dismiss の範囲はサイト全体（delete_transient）とする.
+		 */
+		add_action( 'admin_post_fauc_dismiss_auto_update_notice', array( $this, 'handle_dismiss_auto_update_notice' ) );
 	}
 
 	/**
@@ -251,6 +259,24 @@ class FAUC_Auto_Update_Controller {
 			'FAUC_forced_auto_update_section'
 		);
 
+		// WP_ENVIRONMENT_TYPE によるゲートを無視するかどうか.
+		add_settings_field(
+			'FAUC_ignore_environment_type_field',
+			__( 'WP_ENVIRONMENT_TYPE を無視する', 'forced-auto-update-controller' ),
+			array( $this, 'ignore_environment_type_field_callback' ),
+			'fauc-forced-auto-update-controller',
+			'FAUC_forced_auto_update_section'
+		);
+
+		// 除外リスト以外のプラグイン・テーマを強制的に自動更新ONにするかどうか.
+		add_settings_field(
+			'FAUC_force_non_excluded_field',
+			__( '除外リスト以外を強制ONにする', 'forced-auto-update-controller' ),
+			array( $this, 'force_non_excluded_field_callback' ),
+			'fauc-forced-auto-update-controller',
+			'FAUC_forced_auto_update_section'
+		);
+
 		/**
 		 * -----------------------
 		 * Update 通知設定セクション
@@ -331,6 +357,28 @@ class FAUC_Auto_Update_Controller {
 				'default'           => true,
 			)
 		);
+
+		// WP_ENVIRONMENT_TYPE によるゲートを無視する（デフォルト OFF）.
+		register_setting(
+			'fauc-forced-auto-update-controller',
+			$this->option_name . '_ignore_environment_type',
+			array(
+				'type'              => 'boolean',
+				'sanitize_callback' => 'rest_sanitize_boolean',
+				'default'           => false,
+			)
+		);
+
+		// 除外リスト以外のプラグイン・テーマを強制的に自動更新ONにする（デフォルト ON）.
+		register_setting(
+			'fauc-forced-auto-update-controller',
+			$this->option_name . '_force_non_excluded',
+			array(
+				'type'              => 'boolean',
+				'sanitize_callback' => 'rest_sanitize_boolean',
+				'default'           => true,
+			)
+		);
 	}
 
 	/**
@@ -341,7 +389,7 @@ class FAUC_Auto_Update_Controller {
 	public function settings_section_callback() {
 		echo '<p>';
 		echo esc_html__(
-			'指定したドメインに合致した場合、Git などのバージョン管理下でも各プラグイン・テーマの個別の自動更新設定が有効に機能するようになります。下記のチェックリストで除外したプラグイン・テーマは、個別設定の状態にかかわらず自動更新されません。',
+			'指定したドメインに合致した場合、Git などのバージョン管理下でもプラグイン・テーマの自動更新が機能するようになります。「除外リスト以外を強制ONにする」がデフォルトで有効なため、下記のチェックリストで除外しない限りプラグイン・テーマは自動更新されます。オフにすると各プラグイン・テーマの個別の自動更新設定（一覧画面のトグル）に従います。',
 			'forced-auto-update-controller'
 		);
 		echo '</p>';
@@ -378,6 +426,16 @@ class FAUC_Auto_Update_Controller {
 				esc_textarea( $value )
 			);
 			echo '<p class="description">' . esc_html__( 'FAUC_PRODUCTION_DOMAIN 定数で固定されているため、この設定は無効です（定数の値が優先されます）。', 'forced-auto-update-controller' ) . '</p>';
+
+			// disabled な textarea には name が無いため POST されず、素通しすると
+			// wp-admin/options.php が update_option( $option, null ) を呼んで DB の
+			// 設定値が保存ごとに空に上書きされてしまう（実測で確認済み）。
+			// DB の現在値をそのまま往復させる hidden input で防ぐ.
+			printf(
+				'<input type="hidden" name="%1$s" value="%2$s" />',
+				esc_attr( $this->option_name ),
+				esc_attr( (string) get_option( $this->option_name, '' ) )
+			);
 		} else {
 			printf(
 				'<textarea name="%1$s" class="large-text code" rows="3" placeholder="%2$s">%3$s</textarea>',
@@ -387,43 +445,51 @@ class FAUC_Auto_Update_Controller {
 			);
 		}
 
-		// 診断情報を表示. home_url() はフィルタの影響を受けるため、DB上の生値である
-		// get_option('home') を比較対象にする（is_production_domain() と同じ基準）.
-		$url_parts = wp_parse_url( (string) get_option( 'home' ) );
-		$detected  = '';
-		if ( ! empty( $url_parts['host'] ) ) {
-			$detected = $url_parts['host'];
-			if ( ! empty( $url_parts['port'] ) ) {
-				$detected .= ':' . $url_parts['port'];
-			}
-			$path = isset( $url_parts['path'] ) ? trim( $url_parts['path'], '/' ) : '';
-			if ( '' !== $path ) {
-				$detected .= '/' . $path;
-			}
-		}
-
-		$patterns = array();
-		foreach ( preg_split( '/\r\n|\r|\n/', $value ) as $line ) {
-			$line = trim( $line );
-			if ( '' !== $line ) {
-				$patterns[] = strtolower( $line );
-			}
-		}
+		// 診断情報を表示. 設定画面と notice の判定不整合を防ぐため、判定は
+		// get_control_status() を単一の情報源として使う.
+		$status = $this->get_control_status();
 
 		echo '<div style="margin-top:8px;padding:8px 12px;background:#f0f0f1;border-left:4px solid #2271b1;">';
 		printf(
 			'<p style="margin:0 0 4px;"><strong>%s</strong> <code>%s</code></p>',
 			esc_html__( '検出されたサイトドメイン:', 'forced-auto-update-controller' ),
-			esc_html( $detected )
+			esc_html( $status['detected'] )
 		);
 
-		if ( ! empty( $patterns ) && '' !== $detected ) {
-			if ( in_array( strtolower( $detected ), $patterns, true ) ) {
+		switch ( $status['reason'] ) {
+			case 'active':
 				printf(
 					'<p style="margin:0;color:#00a32a;">&#10003; %s</p>',
 					esc_html__( '保存済みパターンと一致しています。プラグインの自動更新制御は有効です。', 'forced-auto-update-controller' )
 				);
-			} else {
+				if ( 'production' !== $status['environment_type'] ) {
+					printf(
+						'<p style="margin:4px 0 0;color:#50575e;font-size:12px;">%s</p>',
+						sprintf(
+							/* translators: %s: wp_get_environment_type() の値です. */
+							esc_html__( '環境タイプは %s ですが、「WP_ENVIRONMENT_TYPE を無視する」設定が有効なため強制制御は有効です。', 'forced-auto-update-controller' ),
+							esc_html( $status['environment_type'] )
+						)
+					);
+				}
+				break;
+
+			case 'environment_type':
+				printf(
+					'<p style="margin:0;color:#d63638;">&#10007; %s</p>',
+					sprintf(
+						/* translators: %s: wp_get_environment_type() の値です. */
+						esc_html__( 'パターンは一致していますが、WP_ENVIRONMENT_TYPE が %s のため強制制御は無効です。', 'forced-auto-update-controller' ),
+						esc_html( $status['environment_type'] )
+					)
+				);
+				printf(
+					'<p style="margin:4px 0 0;color:#50575e;font-size:12px;">%s</p>',
+					esc_html__( '「WP_ENVIRONMENT_TYPE を無視する」を有効にすると、この環境でも強制制御を有効にできます。', 'forced-auto-update-controller' )
+				);
+				break;
+
+			case 'domain_mismatch':
 				printf(
 					'<p style="margin:0;color:#d63638;">&#10007; %s</p>',
 					esc_html__( '保存済みパターンと一致しません。自動更新制御は無効の状態です。', 'forced-auto-update-controller' )
@@ -431,16 +497,33 @@ class FAUC_Auto_Update_Controller {
 				printf(
 					'<p style="margin:4px 0 0;color:#50575e;font-size:12px;">%s <code>%s</code> / %s <code>%s</code></p>',
 					esc_html__( '保存値:', 'forced-auto-update-controller' ),
-					esc_html( implode( ', ', $patterns ) ),
+					esc_html( implode( ', ', $status['patterns'] ) ),
 					esc_html__( '検出値:', 'forced-auto-update-controller' ),
-					esc_html( strtolower( $detected ) )
+					esc_html( strtolower( $status['detected'] ) )
 				);
-			}
-		} elseif ( empty( $patterns ) ) {
-			printf(
-				'<p style="margin:0;color:#dba617;">&#9888; %s</p>',
-				esc_html__( 'ドメインパターンが未設定です。上記の検出値を参考に入力してください。', 'forced-auto-update-controller' )
-			);
+				break;
+
+			case 'no_host':
+				printf(
+					'<p style="margin:0;color:#d63638;">&#10007; %s</p>',
+					esc_html__( 'サイトURL（home オプション）を解釈できません。', 'forced-auto-update-controller' )
+				);
+				break;
+
+			case 'filtered_off':
+				printf(
+					'<p style="margin:0;color:#d63638;">&#10007; %s</p>',
+					esc_html__( 'fauc_is_production_domain フィルタにより無効化されています。', 'forced-auto-update-controller' )
+				);
+				break;
+
+			case 'unconfigured':
+			default:
+				printf(
+					'<p style="margin:0;color:#dba617;">&#9888; %s</p>',
+					esc_html__( 'ドメインパターンが未設定です。上記の検出値を参考に入力してください。', 'forced-auto-update-controller' )
+				);
+				break;
 		}
 		echo '</div>';
 	}
@@ -523,6 +606,38 @@ class FAUC_Auto_Update_Controller {
 			esc_attr( $this->option_name . '_allow_core_minor_everywhere' ),
 			checked( $option, true, false ),
 			esc_html__( 'ドメインパターンに一致しない環境でも、コアのマイナー/セキュリティ自動更新のみは許可します（推奨）。', 'forced-auto-update-controller' )
+		);
+	}
+
+	/**
+	 * 「WP_ENVIRONMENT_TYPE を無視する」チェックボックスのHTMLを出力.
+	 *
+	 * @return void
+	 */
+	public function ignore_environment_type_field_callback() {
+		$option = get_option( $this->option_name . '_ignore_environment_type', false );
+
+		printf(
+			'<label><input type="checkbox" name="%1$s" value="1" %2$s /> %3$s</label>',
+			esc_attr( $this->option_name . '_ignore_environment_type' ),
+			checked( $option, true, false ),
+			esc_html__( 'ドメインパターンが一致していれば、WP_ENVIRONMENT_TYPE が production 以外でも強制制御を有効にします。', 'forced-auto-update-controller' )
+		);
+	}
+
+	/**
+	 * 「除外リスト以外を強制ONにする」チェックボックスのHTMLを出力.
+	 *
+	 * @return void
+	 */
+	public function force_non_excluded_field_callback() {
+		$option = get_option( $this->option_name . '_force_non_excluded', true );
+
+		printf(
+			'<label><input type="checkbox" name="%1$s" value="1" %2$s /> %3$s</label>',
+			esc_attr( $this->option_name . '_force_non_excluded' ),
+			checked( $option, true, false ),
+			esc_html__( '強制制御が有効な環境で、除外リストに入れたプラグイン・テーマ以外は個別トグルの設定にかかわらず自動更新を強制的に有効にします（推奨）。オフにすると個別トグルの設定を尊重します。', 'forced-auto-update-controller' )
 		);
 	}
 
@@ -718,52 +833,31 @@ class FAUC_Auto_Update_Controller {
 	 * 現在の環境がいずれかのパターンに一致するか（本番環境か）どうかを判定.
 	 *
 	 * 判定結果はリクエスト中に何度も呼ばれる（プラグイン数分ループするフィルタも
-	 * 含む）ため、インスタンスプロパティにメモ化して都度の get_option / preg_match を避ける.
+	 * 含む）ため、get_control_status() 側でインスタンスプロパティにメモ化される.
 	 *
 	 * @return bool true: 一致（本番） / false: 不一致（非本番）です.
 	 */
 	private function is_production_domain() {
-		if ( null !== $this->is_production_domain_cache ) {
-			return $this->is_production_domain_cache;
-		}
-
-		$this->is_production_domain_cache = $this->compute_is_production_domain();
-
-		return $this->is_production_domain_cache;
+		return $this->get_control_status()['active'];
 	}
 
 	/**
-	 * 関数 is_production_domain() の実処理（メモ化なし）.
+	 * 現在のサイトの home オプションから host（+ port + path）を組み立てて返す.
 	 *
-	 * @return bool
+	 * サイトURLの取得に home_url() を使わないのは、フィルタの影響を受け、動的な
+	 * WP_HOME 定義下では信頼できないため。DB上の生値である get_option('home') を
+	 * 比較対象にする.
+	 *
+	 * @return string host（取得できない場合は空文字）です.
 	 */
-	private function compute_is_production_domain() {
-		$patterns = $this->get_domain_patterns();
-
-		if ( empty( $patterns ) ) {
-			return false;
-		}
-
-		// wp_get_environment_type()（WP 5.5+）を補助的な条件として利用する.
-		// WP_ENVIRONMENT_TYPE 定数/環境変数で明示的に production 以外（staging 等）に
-		// 設定されている環境では、ドメインパターンが一致していても強制しない.
-		if ( function_exists( 'wp_get_environment_type' ) && 'production' !== wp_get_environment_type() ) {
-			return false;
-		}
-
-		// home_url() はフィルタの影響を受け、動的な WP_HOME 定義下では信頼できないため、
-		// DB上の生値である get_option('home') を比較対象にする.
+	private function get_detected_host() {
 		$url_parts = wp_parse_url( (string) get_option( 'home' ) );
 
-		if ( empty( $url_parts ) ) {
-			return false;
+		if ( empty( $url_parts ) || empty( $url_parts['host'] ) ) {
+			return '';
 		}
 
-		$host = isset( $url_parts['host'] ) ? $url_parts['host'] : '';
-
-		if ( empty( $host ) ) {
-			return false;
-		}
+		$host = $url_parts['host'];
 
 		// ポート番号があれば付与.
 		if ( ! empty( $url_parts['port'] ) ) {
@@ -772,12 +866,80 @@ class FAUC_Auto_Update_Controller {
 
 		$path = isset( $url_parts['path'] ) ? trim( $url_parts['path'], '/' ) : '';
 
-		$host_with_path = $host;
 		if ( '' !== $path ) {
-			$host_with_path .= '/' . $path;
+			$host .= '/' . $path;
 		}
 
-		$result = false;
+		return $host;
+	}
+
+	/**
+	 * 関数 get_control_status() の結果のメモ化ラッパ.
+	 *
+	 * @return array compute_control_status() の戻り値です.
+	 */
+	private function get_control_status() {
+		if ( null === $this->control_status_cache ) {
+			$this->control_status_cache = $this->compute_control_status();
+		}
+
+		return $this->control_status_cache;
+	}
+
+	/**
+	 * 強制制御が有効かどうかを、理由付きで算出する（メモ化なし）.
+	 *
+	 * 設定画面の notice も一覧の判定もすべてこの結果を単一の情報源として使う.
+	 *
+	 * @return array {
+	 *     @type bool     $active           強制制御が有効かどうかです.
+	 *     @type string   $reason           判定理由（unconfigured|environment_type|no_host|domain_mismatch|filtered_off|active）です.
+	 *     @type string   $detected         get_detected_host() の値です.
+	 *     @type string[] $patterns         検証済み・小文字化済みのドメインパターンです.
+	 *     @type string   $environment_type wp_get_environment_type() の値です.
+	 * }
+	 */
+	private function compute_control_status() {
+		$patterns         = $this->get_domain_patterns();
+		$environment_type = function_exists( 'wp_get_environment_type' ) ? wp_get_environment_type() : '';
+		$detected         = $this->get_detected_host();
+
+		if ( empty( $patterns ) ) {
+			return array(
+				'active'           => false,
+				'reason'           => 'unconfigured',
+				'detected'         => $detected,
+				'patterns'         => array(),
+				'environment_type' => $environment_type,
+			);
+		}
+
+		// wp_get_environment_type()（WP 5.5+）を補助的な条件として利用する.
+		// WP_ENVIRONMENT_TYPE 定数/環境変数で明示的に production 以外（staging 等）に
+		// 設定されている環境では、ドメインパターンが一致していても強制しない。
+		// 「WP_ENVIRONMENT_TYPE を無視する」設定が ON の場合はこのゲートを適用しない.
+		if ( function_exists( 'wp_get_environment_type' ) && 'production' !== $environment_type && ! $this->ignore_environment_type() ) {
+			return array(
+				'active'           => false,
+				'reason'           => 'environment_type',
+				'detected'         => $detected,
+				'patterns'         => $patterns,
+				'environment_type' => $environment_type,
+			);
+		}
+
+		if ( '' === $detected ) {
+			return array(
+				'active'           => false,
+				'reason'           => 'no_host',
+				'detected'         => '',
+				'patterns'         => $patterns,
+				'environment_type' => $environment_type,
+			);
+		}
+
+		$normalized_patterns = array();
+		$result              = false;
 
 		foreach ( $patterns as $pattern ) {
 			$pattern = preg_replace( '#^https?://#i', '', $pattern );
@@ -793,9 +955,11 @@ class FAUC_Auto_Update_Controller {
 			}
 
 			// 小文字に正規化して比較.
-			if ( strtolower( $host_with_path ) === strtolower( $pattern ) ) {
+			$pattern               = strtolower( $pattern );
+			$normalized_patterns[] = $pattern;
+
+			if ( strtolower( $detected ) === $pattern ) {
 				$result = true;
-				break;
 			}
 		}
 
@@ -807,7 +971,35 @@ class FAUC_Auto_Update_Controller {
 		 * @param bool     $result   判定結果です.
 		 * @param string[] $patterns 判定に使用したドメインパターンの配列です.
 		 */
-		return (bool) apply_filters( 'fauc_is_production_domain', $result, $patterns );
+		$filtered = (bool) apply_filters( 'fauc_is_production_domain', $result, $patterns );
+
+		if ( $filtered ) {
+			$reason = 'active';
+		} elseif ( $result ) {
+			$reason = 'filtered_off';
+		} else {
+			$reason = 'domain_mismatch';
+		}
+
+		return array(
+			'active'           => $filtered,
+			'reason'           => $reason,
+			'detected'         => $detected,
+			'patterns'         => $normalized_patterns,
+			'environment_type' => $environment_type,
+		);
+	}
+
+	/**
+	 * 関数 is_production_domain() の実処理（メモ化なし）.
+	 *
+	 * 既存の回帰テスト (tests/DomainDetectionTest.php) をこのメソッド名のまま
+	 * 維持するため、compute_control_status() への薄い委譲として残す.
+	 *
+	 * @return bool
+	 */
+	private function compute_is_production_domain() {
+		return $this->compute_control_status()['active'];
 	}
 
 	/**
@@ -835,6 +1027,25 @@ class FAUC_Auto_Update_Controller {
 	 */
 	private function allow_core_minor_updates_everywhere() {
 		return (bool) get_option( $this->option_name . '_allow_core_minor_everywhere', true );
+	}
+
+	/**
+	 * WP_ENVIRONMENT_TYPE によるゲートを無視するかどうかの設定値を取得する（デフォルト OFF）.
+	 *
+	 * @return bool
+	 */
+	private function ignore_environment_type() {
+		return (bool) get_option( $this->option_name . '_ignore_environment_type', false );
+	}
+
+	/**
+	 * 除外リスト以外のプラグイン・テーマを強制的に自動更新ONにするかどうかの
+	 * 設定値を取得する（デフォルト ON）.
+	 *
+	 * @return bool
+	 */
+	private function force_non_excluded_items() {
+		return (bool) get_option( $this->option_name . '_force_non_excluded', true );
 	}
 
 	/**
@@ -990,11 +1201,11 @@ class FAUC_Auto_Update_Controller {
 			return false;
 		}
 
-		// 除外リストに含まれないプラグインは、プラグイン一覧の個別トグル
-		// （auto_update_plugins オプション）に基づく $update をそのまま尊重する。
-		// 一律 true にすると、個別に無効化したはずが実際には更新され続ける
-		// 誤った安心（false sense of security）を生むため.
-		return $update;
+		// 除外リストに含まれないプラグインは、「除外リスト以外を強制ONにする」
+		// 設定（デフォルト ON）に従い強制的に true を返す。OFF にすると、
+		// プラグイン一覧の個別トグル（auto_update_plugins オプション）に基づく
+		// $update をそのまま尊重する（= 1.9.1 までの挙動）.
+		return $this->force_non_excluded_items() ? true : $update;
 	}
 
 	/**
@@ -1020,9 +1231,11 @@ class FAUC_Auto_Update_Controller {
 			return false;
 		}
 
-		// 除外リストに含まれないテーマは、テーマ一覧の個別トグル
-		// （auto_update_themes オプション）に基づく $update をそのまま尊重する.
-		return $update;
+		// 除外リストに含まれないテーマは、「除外リスト以外を強制ONにする」
+		// 設定（デフォルト ON）に従い強制的に true を返す。OFF にすると、
+		// テーマ一覧の個別トグル（auto_update_themes オプション）に基づく
+		// $update をそのまま尊重する（= 1.9.1 までの挙動）.
+		return $this->force_non_excluded_items() ? true : $update;
 	}
 
 	/**
@@ -1047,7 +1260,11 @@ class FAUC_Auto_Update_Controller {
 	 * @return bool UI 表示可否です.
 	 */
 	public function control_auto_update_ui_for_plugins( $enabled ) {
-		unset( $enabled );
+		// ドメインパターン未設定時は介入しない（WordPress のデフォルト挙動に委ねる）.
+		// これが無いと、未設定なだけで自動更新列そのものが消えてしまう.
+		if ( ! $this->is_configured() ) {
+			return $enabled;
+		}
 
 		return $this->is_production_domain();
 	}
@@ -1059,7 +1276,11 @@ class FAUC_Auto_Update_Controller {
 	 * @return bool UI 表示可否です.
 	 */
 	public function control_auto_update_ui_for_themes( $enabled ) {
-		unset( $enabled );
+		// ドメインパターン未設定時は介入しない（WordPress のデフォルト挙動に委ねる）.
+		// これが無いと、未設定なだけで自動更新列そのものが消えてしまう.
+		if ( ! $this->is_configured() ) {
+			return $enabled;
+		}
 
 		return $this->is_production_domain();
 	}
@@ -1077,28 +1298,35 @@ class FAUC_Auto_Update_Controller {
 			return;
 		}
 
-		if ( $this->is_configured() && $this->is_production_domain() ) {
+		$status = $this->get_control_status();
+
+		if ( 'active' === $status['reason'] ) {
 			return;
 		}
 
 		$settings_url = admin_url( 'options-general.php?page=fauc-forced-auto-update-controller' );
 
+		$messages = array(
+			'unconfigured'     => __( 'Forced Auto Update Controller: ドメインパターンが未設定です。設定するまで自動更新の強制制御は行われません。', 'forced-auto-update-controller' ),
+			'environment_type' => sprintf(
+				/* translators: %s: wp_get_environment_type() の値です. */
+				__( 'Forced Auto Update Controller: 保存済みのドメインパターンは一致していますが、WP_ENVIRONMENT_TYPE が %s のため強制制御は無効です。', 'forced-auto-update-controller' ),
+				$status['environment_type']
+			),
+			'no_host'          => __( 'Forced Auto Update Controller: サイトURL（home オプション）を解釈できないため、自動更新の強制制御は無効の状態です。', 'forced-auto-update-controller' ),
+			'domain_mismatch'  => __( 'Forced Auto Update Controller: 保存済みのドメインパターンが現在のサイトドメインと一致していません。自動更新の強制制御は無効の状態です。', 'forced-auto-update-controller' ),
+			'filtered_off'     => __( 'Forced Auto Update Controller: fauc_is_production_domain フィルタにより自動更新の強制制御が無効化されています。', 'forced-auto-update-controller' ),
+		);
+
+		$message = isset( $messages[ $status['reason'] ] ) ? $messages[ $status['reason'] ] : $messages['unconfigured'];
+
 		echo '<div class="notice notice-warning">';
-		if ( ! $this->is_configured() ) {
-			printf(
-				'<p>%s <a href="%s">%s</a></p>',
-				esc_html__( 'Forced Auto Update Controller: ドメインパターンが未設定です。設定するまで自動更新の強制制御は行われません。', 'forced-auto-update-controller' ),
-				esc_url( $settings_url ),
-				esc_html__( '設定画面へ', 'forced-auto-update-controller' )
-			);
-		} else {
-			printf(
-				'<p>%s <a href="%s">%s</a></p>',
-				esc_html__( 'Forced Auto Update Controller: 保存済みのドメインパターンが現在のサイトドメインと一致していません。自動更新の強制制御は無効の状態です。', 'forced-auto-update-controller' ),
-				esc_url( $settings_url ),
-				esc_html__( '設定画面へ', 'forced-auto-update-controller' )
-			);
-		}
+		printf(
+			'<p>%s <a href="%s">%s</a></p>',
+			esc_html( $message ),
+			esc_url( $settings_url ),
+			esc_html__( '設定画面へ', 'forced-auto-update-controller' )
+		);
 		echo '</div>';
 	}
 
@@ -1259,7 +1487,7 @@ class FAUC_Auto_Update_Controller {
 			$pending_version = $core_updates[0]->version;
 		}
 
-		$core_auto_update_enabled = $this->is_production_domain();
+		$status = $this->get_control_status();
 
 		echo '<div class="forced-auto-update-core-status" style="margin-top:12px;padding:8px 12px;background:#f0f0f1;border-left:4px solid #2271b1;">';
 
@@ -1282,12 +1510,43 @@ class FAUC_Auto_Update_Controller {
 		printf(
 			'<p style="margin:0;">%s <strong>%s</strong></p>',
 			esc_html__( 'このプラグインによるコア自動更新:', 'forced-auto-update-controller' ),
-			$core_auto_update_enabled
-				? esc_html__( '有効です。', 'forced-auto-update-controller' )
-				: esc_html__( '無効です（ドメインパターン未一致）。', 'forced-auto-update-controller' )
+			esc_html( $this->get_core_auto_update_status_label( $status ) )
 		);
 
 		echo '</div>';
+	}
+
+	/**
+	 * コア自動更新の有効状況を表す短い文言を get_control_status() の reason から組み立てる.
+	 *
+	 * @param array $status get_control_status() の戻り値です.
+	 * @return string
+	 */
+	private function get_core_auto_update_status_label( $status ) {
+		switch ( $status['reason'] ) {
+			case 'active':
+				return __( '有効です。', 'forced-auto-update-controller' );
+
+			case 'environment_type':
+				return sprintf(
+					/* translators: %s: wp_get_environment_type() の値です. */
+					__( '無効です（WP_ENVIRONMENT_TYPE が %s のため）。', 'forced-auto-update-controller' ),
+					$status['environment_type']
+				);
+
+			case 'no_host':
+				return __( '無効です（サイトURLを解釈できないため）。', 'forced-auto-update-controller' );
+
+			case 'filtered_off':
+				return __( '無効です（fauc_is_production_domain フィルタにより無効化）。', 'forced-auto-update-controller' );
+
+			case 'domain_mismatch':
+				return __( '無効です（ドメインパターン未一致）。', 'forced-auto-update-controller' );
+
+			case 'unconfigured':
+			default:
+				return __( '無効です（ドメインパターン未設定）。', 'forced-auto-update-controller' );
+		}
 	}
 
 	/**
@@ -1459,6 +1718,19 @@ class FAUC_Auto_Update_Controller {
 			return;
 		}
 
+		$current_url = isset( $_SERVER['REQUEST_URI'] ) ? esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
+
+		$dismiss_url = wp_nonce_url(
+			add_query_arg(
+				array(
+					'action'           => 'fauc_dismiss_auto_update_notice',
+					'_wp_http_referer' => rawurlencode( $current_url ),
+				),
+				admin_url( 'admin-post.php' )
+			),
+			'fauc_dismiss_auto_update_notice'
+		);
+
 		echo '<div class="notice notice-info">';
 		printf(
 			'<p><strong>%s</strong> %s</p>',
@@ -1470,7 +1742,52 @@ class FAUC_Auto_Update_Controller {
 			echo '<li>' . esc_html( $item ) . '</li>';
 		}
 		echo '</ul>';
+		printf(
+			'<p><a href="%s" class="button button-secondary">%s</a></p>',
+			esc_url( $dismiss_url ),
+			esc_html__( '確認済みにする（通知を消す）', 'forced-auto-update-controller' )
+		);
 		echo '</div>';
+	}
+
+	/**
+	 * 「確認済みにする（通知を消す）」ボタンの admin-post.php ハンドラ.
+	 *
+	 * Dismiss の範囲はサイト全体（delete_transient）とする.
+	 *
+	 * @return void
+	 */
+	public function handle_dismiss_auto_update_notice() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die(
+				esc_html__( 'この操作を行う権限がありません。', 'forced-auto-update-controller' ),
+				esc_html__( '権限エラー', 'forced-auto-update-controller' ),
+				array( 'response' => 403 )
+			);
+		}
+
+		check_admin_referer( 'fauc_dismiss_auto_update_notice' );
+
+		delete_transient( $this->option_name . '_last_auto_update_summary' );
+
+		$redirect_to = wp_get_referer();
+
+		wp_safe_redirect( $redirect_to ? $redirect_to : admin_url() );
+		$this->terminate_request();
+	}
+
+	/**
+	 * リクエスト処理を終了する.
+	 *
+	 * リダイレクト送出（wp_safe_redirect()）の直後に呼ぶ分離ポイントとして
+	 * 用意した。テストでは PHPUnit プロセス自体を終了させる exit を直接呼べ
+	 * ないため、サブクラスでオーバーライドして例外に置き換える（本番では
+	 * 通常の exit と同じ）.
+	 *
+	 * @return void
+	 */
+	protected function terminate_request() {
+		exit;
 	}
 }
 

@@ -19,11 +19,18 @@ abstract class FAUC_Test_Case extends TestCase {
 	 * @return void
 	 */
 	protected function setUp(): void {
-		$GLOBALS['fauc_test_options']         = array();
-		$GLOBALS['fauc_test_site_options']    = array();
-		$GLOBALS['fauc_test_env_type']        = 'production';
-		$GLOBALS['fauc_test_filters']         = array();
-		$GLOBALS['fauc_test_settings_errors'] = array();
+		$GLOBALS['fauc_test_options']          = array();
+		$GLOBALS['fauc_test_site_options']     = array();
+		$GLOBALS['fauc_test_env_type']         = 'production';
+		$GLOBALS['fauc_test_filters']          = array();
+		$GLOBALS['fauc_test_settings_errors']  = array();
+		$GLOBALS['fauc_test_transients']       = array();
+		$GLOBALS['fauc_test_site_transients']  = array();
+		$GLOBALS['fauc_test_current_user_can'] = true;
+		$GLOBALS['fauc_test_admin_referer_ok'] = true;
+		$GLOBALS['fauc_test_referer']          = false;
+		$GLOBALS['fauc_test_wp_die_calls']     = array();
+		$GLOBALS['fauc_test_redirects']        = array();
 
 		unset( $GLOBALS['wp_version'] );
 	}

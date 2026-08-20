@@ -3,7 +3,7 @@ Contributors: lunaluna_dev
 Tags: update, auto-update, automatic updates, git, version control
 Requires at least: 6.0
 Tested up to: 7.1
-Stable tag: 1.9.1
+Stable tag: 1.9.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -42,6 +42,14 @@ therefore affect the entire network in unintended ways. Use at your own
 risk in a Multisite environment.
 
 == Changelog ==
+
+= 1.9.2 =
+* Added: a "Dismiss" button on the "automatic updates ran" admin notice, so it no longer has to wait out its one-week transient expiry to disappear. Dismissing clears the notice site-wide.
+* Fixed: the settings page's own match indicator and the persistent admin notice used to disagree about whether the domain pattern matched — the notice applied a `wp_get_environment_type() !== 'production'` check that the settings page's diagnostic display didn't have. Both now read from a single `compute_control_status()` source of truth and always report the same reason.
+* Added: an "Ignore WP_ENVIRONMENT_TYPE" setting (off by default) to let the domain-pattern match take effect even when `wp_get_environment_type()` is not `production`.
+* Changed (breaking change — please read): `control_auto_update_plugin()` / `control_auto_update_theme()` used to return `$update` unchanged for plugins/themes not on the exclusion list; when that value was `null`, WordPress core treated it as "not forced" and silently fell back to the per-item toggle, so forced auto-updates never actually took effect on a matching domain. A new "Force auto-updates for everything except the exclusion list" setting (**on by default**) now forces those items on. If you relied on the per-item toggle being respected, turn this setting off to restore the 1.9.1 behavior.
+* Fixed: the automatic-update column in the Plugins/Themes list disappeared whenever no domain pattern was configured yet, contradicting the 1.7.0 fail-safe that's supposed to defer entirely to WordPress's own defaults until a pattern is set.
+* Fixed: when `FAUC_PRODUCTION_DOMAIN` is defined, the domain-pattern textarea is rendered disabled without a `name` attribute, so it was never submitted with the settings form. WordPress's `options.php` then saved a `null` value, silently clearing the saved domain pattern on every visit to the settings page. A hidden field now round-trips the existing value so it survives saving.
 
 = 1.9.1 =
 * Changed: updated the shared `lunaluna/l2d-wp-github-update-lib` library to 1.1.0. The vendored copy now moves to the library's `dist` subtree distribution (only the runtime files are bundled; development-only files such as tests, CI config, and `CLAUDE.md` are no longer shipped), and this plugin's ZIP build now delegates to the library's shared build script instead of a plugin-local copy, picking up its fix for a stale build artifact getting nested inside a freshly built ZIP when rebuilding in the same working tree. No runtime behavior change.
