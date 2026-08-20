@@ -144,6 +144,13 @@ class FAUC_Auto_Update_Controller {
 		 */
 		add_action( 'automatic_updates_complete', array( $this, 'handle_automatic_updates_complete' ) );
 		add_action( 'admin_notices', array( $this, 'render_last_auto_update_notice' ) );
+
+		/**
+		 * (13-1) 自動更新実行通知の「確認済みにする（通知を消す）」ボタンのハンドラ.
+		 *
+		 * Dismiss の範囲はサイト全体（delete_transient）とする.
+		 */
+		add_action( 'admin_post_fauc_dismiss_auto_update_notice', array( $this, 'handle_dismiss_auto_update_notice' ) );
 	}
 
 	/**
@@ -1701,6 +1708,19 @@ class FAUC_Auto_Update_Controller {
 			return;
 		}
 
+		$current_url = isset( $_SERVER['REQUEST_URI'] ) ? esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
+
+		$dismiss_url = wp_nonce_url(
+			add_query_arg(
+				array(
+					'action'           => 'fauc_dismiss_auto_update_notice',
+					'_wp_http_referer' => rawurlencode( $current_url ),
+				),
+				admin_url( 'admin-post.php' )
+			),
+			'fauc_dismiss_auto_update_notice'
+		);
+
 		echo '<div class="notice notice-info">';
 		printf(
 			'<p><strong>%s</strong> %s</p>',
@@ -1712,7 +1732,38 @@ class FAUC_Auto_Update_Controller {
 			echo '<li>' . esc_html( $item ) . '</li>';
 		}
 		echo '</ul>';
+		printf(
+			'<p><a href="%s" class="button button-secondary">%s</a></p>',
+			esc_url( $dismiss_url ),
+			esc_html__( '確認済みにする（通知を消す）', 'forced-auto-update-controller' )
+		);
 		echo '</div>';
+	}
+
+	/**
+	 * 「確認済みにする（通知を消す）」ボタンの admin-post.php ハンドラ.
+	 *
+	 * Dismiss の範囲はサイト全体（delete_transient）とする.
+	 *
+	 * @return void
+	 */
+	public function handle_dismiss_auto_update_notice() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die(
+				esc_html__( 'この操作を行う権限がありません。', 'forced-auto-update-controller' ),
+				esc_html__( '権限エラー', 'forced-auto-update-controller' ),
+				array( 'response' => 403 )
+			);
+		}
+
+		check_admin_referer( 'fauc_dismiss_auto_update_notice' );
+
+		delete_transient( $this->option_name . '_last_auto_update_summary' );
+
+		$redirect_to = wp_get_referer();
+
+		wp_safe_redirect( $redirect_to ? $redirect_to : admin_url() );
+		exit;
 	}
 }
 
