@@ -3,7 +3,7 @@ Contributors: lunaluna_dev
 Tags: update, auto-update, automatic updates, git, version control
 Requires at least: 6.0
 Tested up to: 7.1
-Stable tag: 1.9.0
+Stable tag: 1.9.1
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -42,6 +42,9 @@ therefore affect the entire network in unintended ways. Use at your own
 risk in a Multisite environment.
 
 == Changelog ==
+
+= 1.9.1 =
+* Changed: updated the shared `lunaluna/l2d-wp-github-update-lib` library to 1.1.0. The vendored copy now moves to the library's `dist` subtree distribution (only the runtime files are bundled; development-only files such as tests, CI config, and `CLAUDE.md` are no longer shipped), and this plugin's ZIP build now delegates to the library's shared build script instead of a plugin-local copy, picking up its fix for a stale build artifact getting nested inside a freshly built ZIP when rebuilding in the same working tree. No runtime behavior change.
 
 = 1.9.0 =
 * Changed: the GitHub Releases self-update mechanism (previously `FAUC_GitHub_Updater`) is now provided by the shared `lunaluna/l2d-wp-github-update-lib` library, so the same update/release logic can be reused across this author's other plugins instead of being copy-pasted. The existing `FAUC_github_release_cache` transient key and `fauc_github_updater_*` filters keep working unchanged.
