@@ -4,8 +4,9 @@
  *
  * ドメインパターンを指定し、パターンが一致したら
  *   - コア/翻訳ファイルの自動更新を強制的に有効化
- *   - プラグイン/テーマは、個別トグル（auto_update_plugins/themes）の設定を尊重して
- *     Git などのバージョン管理下でも自動更新が機能するようにする
+ *   - プラグイン/テーマは、除外リストに入れていない限り自動更新を強制的に有効化する
+ *     （Git などのバージョン管理下でも自動更新が機能するようにする。設定でオフにすると
+ *     個別トグル（auto_update_plugins/themes）の設定を尊重する挙動に戻せる）
  *   - プラグイン/テーマ一覧に自動更新トグルUI (WP5.5+) を表示
  *   - ただし、チェックが入っているプラグイン・テーマは自動更新を強制除外
  * それ以外の環境では自動更新を無効化し、UI も非表示にする
@@ -260,6 +261,15 @@ class FAUC_Auto_Update_Controller {
 			'FAUC_forced_auto_update_section'
 		);
 
+		// 除外リスト以外のプラグイン・テーマを強制的に自動更新ONにするかどうか.
+		add_settings_field(
+			'FAUC_force_non_excluded_field',
+			__( '除外リスト以外を強制ONにする', 'forced-auto-update-controller' ),
+			array( $this, 'force_non_excluded_field_callback' ),
+			'fauc-forced-auto-update-controller',
+			'FAUC_forced_auto_update_section'
+		);
+
 		/**
 		 * -----------------------
 		 * Update 通知設定セクション
@@ -351,6 +361,17 @@ class FAUC_Auto_Update_Controller {
 				'default'           => false,
 			)
 		);
+
+		// 除外リスト以外のプラグイン・テーマを強制的に自動更新ONにする（デフォルト ON）.
+		register_setting(
+			'fauc-forced-auto-update-controller',
+			$this->option_name . '_force_non_excluded',
+			array(
+				'type'              => 'boolean',
+				'sanitize_callback' => 'rest_sanitize_boolean',
+				'default'           => true,
+			)
+		);
 	}
 
 	/**
@@ -361,7 +382,7 @@ class FAUC_Auto_Update_Controller {
 	public function settings_section_callback() {
 		echo '<p>';
 		echo esc_html__(
-			'指定したドメインに合致した場合、Git などのバージョン管理下でも各プラグイン・テーマの個別の自動更新設定が有効に機能するようになります。下記のチェックリストで除外したプラグイン・テーマは、個別設定の状態にかかわらず自動更新されません。',
+			'指定したドメインに合致した場合、Git などのバージョン管理下でもプラグイン・テーマの自動更新が機能するようになります。「除外リスト以外を強制ONにする」がデフォルトで有効なため、下記のチェックリストで除外しない限りプラグイン・テーマは自動更新されます。オフにすると各プラグイン・テーマの個別の自動更新設定（一覧画面のトグル）に従います。',
 			'forced-auto-update-controller'
 		);
 		echo '</p>';
@@ -584,6 +605,22 @@ class FAUC_Auto_Update_Controller {
 			esc_attr( $this->option_name . '_ignore_environment_type' ),
 			checked( $option, true, false ),
 			esc_html__( 'ドメインパターンが一致していれば、WP_ENVIRONMENT_TYPE が production 以外でも強制制御を有効にします。', 'forced-auto-update-controller' )
+		);
+	}
+
+	/**
+	 * 「除外リスト以外を強制ONにする」チェックボックスのHTMLを出力.
+	 *
+	 * @return void
+	 */
+	public function force_non_excluded_field_callback() {
+		$option = get_option( $this->option_name . '_force_non_excluded', true );
+
+		printf(
+			'<label><input type="checkbox" name="%1$s" value="1" %2$s /> %3$s</label>',
+			esc_attr( $this->option_name . '_force_non_excluded' ),
+			checked( $option, true, false ),
+			esc_html__( '強制制御が有効な環境で、除外リストに入れたプラグイン・テーマ以外は個別トグルの設定にかかわらず自動更新を強制的に有効にします（推奨）。オフにすると個別トグルの設定を尊重します。', 'forced-auto-update-controller' )
 		);
 	}
 
@@ -985,6 +1022,16 @@ class FAUC_Auto_Update_Controller {
 	}
 
 	/**
+	 * 除外リスト以外のプラグイン・テーマを強制的に自動更新ONにするかどうかの
+	 * 設定値を取得する（デフォルト ON）.
+	 *
+	 * @return bool
+	 */
+	private function force_non_excluded_items() {
+		return (bool) get_option( $this->option_name . '_force_non_excluded', true );
+	}
+
+	/**
 	 * (1) Git などのバージョン管理下でも自動更新を許可するかどうか制御.
 	 *
 	 * @param bool $checkout true: バージョン管理下, false: 非管理です.
@@ -1137,11 +1184,11 @@ class FAUC_Auto_Update_Controller {
 			return false;
 		}
 
-		// 除外リストに含まれないプラグインは、プラグイン一覧の個別トグル
-		// （auto_update_plugins オプション）に基づく $update をそのまま尊重する。
-		// 一律 true にすると、個別に無効化したはずが実際には更新され続ける
-		// 誤った安心（false sense of security）を生むため.
-		return $update;
+		// 除外リストに含まれないプラグインは、「除外リスト以外を強制ONにする」
+		// 設定（デフォルト ON）に従い強制的に true を返す。OFF にすると、
+		// プラグイン一覧の個別トグル（auto_update_plugins オプション）に基づく
+		// $update をそのまま尊重する（= 1.9.1 までの挙動）.
+		return $this->force_non_excluded_items() ? true : $update;
 	}
 
 	/**
@@ -1167,9 +1214,11 @@ class FAUC_Auto_Update_Controller {
 			return false;
 		}
 
-		// 除外リストに含まれないテーマは、テーマ一覧の個別トグル
-		// （auto_update_themes オプション）に基づく $update をそのまま尊重する.
-		return $update;
+		// 除外リストに含まれないテーマは、「除外リスト以外を強制ONにする」
+		// 設定（デフォルト ON）に従い強制的に true を返す。OFF にすると、
+		// テーマ一覧の個別トグル（auto_update_themes オプション）に基づく
+		// $update をそのまま尊重する（= 1.9.1 までの挙動）.
+		return $this->force_non_excluded_items() ? true : $update;
 	}
 
 	/**
@@ -1194,7 +1243,11 @@ class FAUC_Auto_Update_Controller {
 	 * @return bool UI 表示可否です.
 	 */
 	public function control_auto_update_ui_for_plugins( $enabled ) {
-		unset( $enabled );
+		// ドメインパターン未設定時は介入しない（WordPress のデフォルト挙動に委ねる）.
+		// これが無いと、未設定なだけで自動更新列そのものが消えてしまう.
+		if ( ! $this->is_configured() ) {
+			return $enabled;
+		}
 
 		return $this->is_production_domain();
 	}
@@ -1206,7 +1259,11 @@ class FAUC_Auto_Update_Controller {
 	 * @return bool UI 表示可否です.
 	 */
 	public function control_auto_update_ui_for_themes( $enabled ) {
-		unset( $enabled );
+		// ドメインパターン未設定時は介入しない（WordPress のデフォルト挙動に委ねる）.
+		// これが無いと、未設定なだけで自動更新列そのものが消えてしまう.
+		if ( ! $this->is_configured() ) {
+			return $enabled;
+		}
 
 		return $this->is_production_domain();
 	}
