@@ -54,8 +54,36 @@ jobs:
             exit 1
           fi
 
+  tests:
+    # release.yml はタグ push で発火し、CI (ci.yml) の成否には依存していない
+    # (verify-pot-version は .pot のバージョン突合のみ)。テストが赤でも
+    # タグを打てばリリースが出てしまうため、ci.yml の phpcs/phpstan/phpunit
+    # 3 ジョブと同じセットアップでここでも実行し、機械的に止める。
+    name: Tests (PHPCS / PHPStan / PHPUnit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          coverage: none
+
+      - name: Install Composer dependencies
+        uses: ramsey/composer-install@v3
+
+      - name: Run PHPCS
+        run: vendor/bin/phpcs --standard=phpcs.xml.dist
+
+      - name: Run PHPStan
+        run: vendor/bin/phpstan analyse --no-progress
+
+      - name: Run PHPUnit
+        run: vendor/bin/phpunit
+
   release:
-    needs: verify-pot-version
+    needs: [ verify-pot-version, tests ]
     uses: lunaluna/l2d-wp-github-update-lib/.github/workflows/plugin-release.yml@1.1.0
     with:
       slug: forced-auto-update-controller
