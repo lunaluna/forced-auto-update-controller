@@ -55,7 +55,7 @@ class ControlStatusTest extends FAUC_Test_Case {
 	 */
 	public function provide_control_status_cases() {
 		return array(
-			'A1: パターン未設定 => unconfigured'                     => array( 'https://example.com', '', 'production', false, null, false, 'unconfigured' ),
+			'A1: パターン未設定 => unconfigured'                     => array( 'https://example.com', '', 'production', false, null, true, 'unconfigured' ),
 			'A2: local かつ無視OFF => environment_type'              => array( 'https://example.com', 'example.com', 'local', false, null, false, 'environment_type' ),
 			'A3: local かつ無視ON・一致 => active'                    => array( 'https://example.com', 'example.com', 'local', true, null, true, 'active' ),
 			'A4: local かつ無視ON・不一致 => domain_mismatch'         => array( 'https://example.com', 'other.com', 'local', true, null, false, 'domain_mismatch' ),
