@@ -426,6 +426,16 @@ class FAUC_Auto_Update_Controller {
 				esc_textarea( $value )
 			);
 			echo '<p class="description">' . esc_html__( 'FAUC_PRODUCTION_DOMAIN 定数で固定されているため、この設定は無効です（定数の値が優先されます）。', 'forced-auto-update-controller' ) . '</p>';
+
+			// disabled な textarea には name が無いため POST されず、素通しすると
+			// wp-admin/options.php が update_option( $option, null ) を呼んで DB の
+			// 設定値が保存ごとに空に上書きされてしまう（実測で確認済み）。
+			// DB の現在値をそのまま往復させる hidden input で防ぐ.
+			printf(
+				'<input type="hidden" name="%1$s" value="%2$s" />',
+				esc_attr( $this->option_name ),
+				esc_attr( (string) get_option( $this->option_name, '' ) )
+			);
 		} else {
 			printf(
 				'<textarea name="%1$s" class="large-text code" rows="3" placeholder="%2$s">%3$s</textarea>',
