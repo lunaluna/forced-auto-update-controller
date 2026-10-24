@@ -3,7 +3,7 @@ Contributors: lunaluna_dev
 Tags: update, auto-update, automatic updates, git, version control
 Requires at least: 6.0
 Tested up to: 7.1
-Stable tag: 1.9.2
+Stable tag: 1.9.3
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -42,6 +42,10 @@ therefore affect the entire network in unintended ways. Use at your own
 risk in a Multisite environment.
 
 == Changelog ==
+
+= 1.9.3 =
+* Changed: updated the shared `lunaluna/l2d-wp-github-update-lib` library to 1.3.1. This brings the library's security hardening of the GitHub Releases self-updater (the download token is only sent to the GitHub API asset URL, redirects are no longer followed blindly, the release asset must exactly match `{slug}.{version}.zip`, and the extracted plugin is checked for its main file before it replaces the installed one). No other runtime behavior change.
+* Changed: the release workflow now creates a draft GitHub Release so the ZIP can be checked before it is published, and the CI/release workflows pin their GitHub Actions to commit SHAs. Development-only; not shipped in the plugin ZIP.
 
 = 1.9.2 =
 * Added: a "Dismiss" button on the "automatic updates ran" admin notice, so it no longer has to wait out its one-week transient expiry to disappear. Dismissing clears the notice site-wide.
